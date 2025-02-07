@@ -1,0 +1,23 @@
+# Ignore appsettings.json
+appsettings.json
+
+# Ignore bin and obj folders
+/StoreAPI/bin/
+/StoreAPI/obj/
+/StoreBusinessLayer/bin/
+/StoreBusinessLayer/obj/
+/StoreDataAccessLayer/bin/
+/StoreDataAccessLayer/obj/
+
+# Ignore Visual Studio user-specific files
+*.user
+*.suo
+.vs/
+
+# Ignore log files
+*.log
+
+# Ignore build artifacts
+*.dll
+*.exe
+*.pdb
