@@ -1,4 +1,5 @@
-﻿using StoreDataAccessLayer;
+﻿using Npgsql;
+using StoreDataAccessLayer;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -145,5 +146,10 @@ namespace StoreBusinessLayer
         {
             return await _productsDAL.UpdateProductAsync(dto);
         }
+        public async Task<bool> UpdateProductQuantity(int id, int quantity, NpgsqlConnection conn, NpgsqlTransaction transaction)
+        {
+            return await _productsDAL.UpdateProductQuantity(id, quantity, conn, transaction);
+        }
+
     }
 }

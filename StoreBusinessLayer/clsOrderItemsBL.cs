@@ -65,9 +65,9 @@ namespace StoreBusinessLayer
             else return null;
         }
 
-        private bool _AddNewOrderItem()
+        private async Task<bool> _AddNewOrderItem()
         {
-            int orderItemID = _orderItemsDAL.AddOrderItem(this.DTO);
+            int orderItemID = await _orderItemsDAL.AddOrderItem(this.DTO);
             if (orderItemID > 0)
             {
                 this.DTO.OrderItemID = orderItemID;
@@ -75,31 +75,31 @@ namespace StoreBusinessLayer
             return orderItemID > 0;
         }
 
-        private bool _UpdateOrderItem()
+        private async Task<bool> _UpdateOrderItem()
         {
-            return _orderItemsDAL.UpdateOrderItem(this.DTO);
+            return await _orderItemsDAL.UpdateOrderItem(this.DTO);
         }
 
-        public bool Save()
+        public async Task<bool> Save()
         {
             switch (Mode)
             {
                 case enMode.AddNew:
-                    if (_AddNewOrderItem())
+                    if (await _AddNewOrderItem())
                     {
                         Mode = enMode.Update;
                         return true;
                     }
                     else return false;
                 case enMode.Update:
-                    return _UpdateOrderItem();
+                    return await _UpdateOrderItem();
             }
             return false;
         }
 
-        public bool DeleteOrderItemByOrderItemID(int id)
+        public async Task<bool> DeleteOrderItemByOrderItemID(int id)
         {
-            return _orderItemsDAL.DeleteOrderItemByOrderItemID(id);
+            return await _orderItemsDAL.DeleteOrderItemByOrderItemID(id);
         }
 
         public bool IsOrderItemExistsByOrderItemID(int id)

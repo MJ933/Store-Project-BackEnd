@@ -1139,5 +1139,23 @@ int? categoryId, int? quantity, bool? isActive
                 return false;
             }
         }
+
+        public async Task<bool> UpdateProductQuantity(int id, int quantity, NpgsqlConnection conn, NpgsqlTransaction transaction)
+        {
+            try
+            {
+                var result = await conn.ExecuteAsync(
+                   "UPDATE Products SET StockQuantity = @StockQuantity WHERE ProductID = @ProductID;",
+                   new { ProductID = id, StockQuantity = quantity }, transaction
+               );
+                return result > 0; // Return true if at least one row was affected
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                return false;
+            }
+        }
+
     }
 }

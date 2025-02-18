@@ -38,10 +38,12 @@ namespace StoreDataAccessLayer
     public class clsOrderItemsDAL
     {
         private readonly NpgsqlDataSource _dataSource;
+        private readonly clsProductsDAL _productsDAL;
 
-        public clsOrderItemsDAL(NpgsqlDataSource dataSource)
+        public clsOrderItemsDAL(NpgsqlDataSource dataSource, clsProductsDAL productsDAL)
         {
             _dataSource = dataSource ?? throw new ArgumentNullException(nameof(dataSource));
+            _productsDAL = productsDAL;
         }
 
         public List<OrderItemDTO> GetAllOrderItems()
@@ -193,21 +195,40 @@ ORDER BY
             return null;
         }
 
-        public int AddOrderItem(OrderItemDTO dto)
+
+        public async Task<int> AddOrderItem(OrderItemDTO dto)
         {
+            NpgsqlTransaction transaction = null;
             try
             {
                 using (var connection = _dataSource.OpenConnection())
-                using (var command = new NpgsqlCommand("INSERT INTO OrderItems (OrderID, ProductID, Quantity, Price) VALUES (@OrderID, @ProductID, @Quantity, @Price) RETURNING OrderItemID", connection))
                 {
-                    command.Parameters.AddWithValue("@OrderID", dto.OrderID);
-                    command.Parameters.AddWithValue("@ProductID", dto.ProductID);
-                    command.Parameters.AddWithValue("@Quantity", dto.Quantity);
-                    command.Parameters.AddWithValue("@Price", dto.Price);
-                    var result = command.ExecuteScalar();
-                    if (result != null)
+                    transaction = connection.BeginTransaction();
+                    using (var command = new NpgsqlCommand("INSERT INTO OrderItems (OrderID, ProductID, Quantity, Price)" +
+                        " VALUES (@OrderID, @ProductID, @Quantity, @Price) RETURNING OrderItemID", connection, transaction))
                     {
-                        return (int)result;
+                        command.Parameters.AddWithValue("@OrderID", dto.OrderID);
+                        command.Parameters.AddWithValue("@ProductID", dto.ProductID);
+                        command.Parameters.AddWithValue("@Quantity", dto.Quantity);
+                        command.Parameters.AddWithValue("@Price", dto.Price);
+                        var result = command.ExecuteScalar();
+                        if (result == null)
+                        {
+                            transaction.Rollback();
+                            return (0);
+                        }
+
+                        int orderItemID = (int)result;
+                        var product = await _productsDAL.GetProductByProductIDAsync(dto.ProductID);
+                        bool isStockUpdated = await _productsDAL.UpdateProductQuantity(dto.ProductID, product.StockQuantity - dto.Quantity, connection, transaction);
+                        if (!isStockUpdated)
+                        {
+                            // Rollback if the stock update fails
+                            transaction.Rollback();
+                            return 0;
+                        }
+                        transaction.Commit();
+                        return orderItemID;
                     }
                 }
             }
@@ -222,19 +243,41 @@ ORDER BY
             return 0;
         }
 
-        public bool UpdateOrderItem(OrderItemDTO dto)
+        public async Task<bool> UpdateOrderItem(OrderItemDTO dto)
         {
+            NpgsqlTransaction transaction = null;
             try
             {
                 using (var connection = _dataSource.OpenConnection())
-                using (var command = new NpgsqlCommand("UPDATE OrderItems SET  Quantity = @Quantity, Price = @Price WHERE OrderItemID = @OrderItemID", connection))
                 {
-                    command.Parameters.AddWithValue("@OrderItemID", dto.OrderItemID);
-                    command.Parameters.AddWithValue("@ProductID", dto.ProductID);
-                    command.Parameters.AddWithValue("@Quantity", dto.Quantity);
-                    command.Parameters.AddWithValue("@Price", dto.Price);
-                    int rowsAffected = command.ExecuteNonQuery();
-                    return rowsAffected > 0;
+                    transaction = connection.BeginTransaction();
+                    using (var command = new NpgsqlCommand("UPDATE OrderItems SET  Quantity = @Quantity," +
+                        " Price = @Price WHERE OrderItemID = @OrderItemID", connection, transaction))
+                    {
+                        command.Parameters.AddWithValue("@OrderItemID", dto.OrderItemID);
+                        command.Parameters.AddWithValue("@ProductID", dto.ProductID);
+                        command.Parameters.AddWithValue("@Quantity", dto.Quantity);
+                        command.Parameters.AddWithValue("@Price", dto.Price);
+                        int rowsAffected = command.ExecuteNonQuery();
+                        if (rowsAffected <= 0)
+                        {
+                            transaction.Rollback();
+                            return false;
+                        }
+                        int orderItemID = dto.OrderItemID;
+                        var product = await _productsDAL.GetProductByProductIDAsync(dto.ProductID);
+                        int OldQuantity = GetOrderItemByOrderItemID(orderItemID).Quantity;
+                        int CurrentQuantity = OldQuantity - dto.Quantity;
+                        bool isStockUpdated = await _productsDAL.UpdateProductQuantity(dto.ProductID, product.StockQuantity + CurrentQuantity, connection, transaction);
+                        if (!isStockUpdated)
+                        {
+                            // Rollback if the stock update fails
+                            transaction.Rollback();
+                            return false;
+                        }
+                        transaction.Commit();
+                        return true;
+                    }
                 }
             }
             catch (NpgsqlException ex)
@@ -248,16 +291,38 @@ ORDER BY
             return false;
         }
 
-        public bool DeleteOrderItemByOrderItemID(int id)
+        public async Task<bool> DeleteOrderItemByOrderItemID(int id)
         {
+            NpgsqlTransaction transaction = null;
             try
             {
                 using (var connection = _dataSource.OpenConnection())
-                using (var command = new NpgsqlCommand("DELETE FROM OrderItems WHERE OrderItemID = @OrderItemID", connection))
                 {
-                    command.Parameters.AddWithValue("@OrderItemID", id);
-                    int rowsAffected = command.ExecuteNonQuery();
-                    return rowsAffected > 0;
+                    transaction = connection.BeginTransaction();
+                    using (var command = new NpgsqlCommand("DELETE FROM OrderItems WHERE OrderItemID = @OrderItemID", connection))
+                    {
+                        command.Parameters.AddWithValue("@OrderItemID", id);
+                        int rowsAffected = await command.ExecuteNonQueryAsync();
+                        if (rowsAffected <= 0)
+                        {
+                            transaction.Rollback();
+                            return false;
+                        }
+
+                        int orderItemID = id;
+                        var OrderItem = GetOrderItemByOrderItemID(id);
+                        int OldQuantity = GetOrderItemByOrderItemID(orderItemID).Quantity;
+                        var product = await _productsDAL.GetProductByProductIDAsync(OrderItem.ProductID);
+                        bool isStockUpdated = await _productsDAL.UpdateProductQuantity(product.ProductID, product.StockQuantity + OrderItem.Quantity, connection, transaction);
+                        if (!isStockUpdated)
+                        {
+                            // Rollback if the stock update fails
+                            transaction.Rollback();
+                            return false;
+                        }
+                        transaction.Commit();
+                        return true;
+                    }
                 }
             }
             catch (NpgsqlException ex)

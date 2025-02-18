@@ -138,7 +138,7 @@ else
 }
 
 app.UseMiddleware<PrerenderMiddleware>();
- app.UseHttpsRedirection();
+app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

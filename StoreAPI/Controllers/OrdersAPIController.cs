@@ -104,6 +104,10 @@ namespace StoreAPI.Controllers
             return Ok(ordersList);
         }
 
+
+
+
+
         [HttpPost("Create", Name = "AddOrder")]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status201Created)]
@@ -128,7 +132,7 @@ namespace StoreAPI.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        //[Authorize(Roles = "sales,admin")]
+        [Authorize(Roles = "sales,admin")]
         public ActionResult<OrderDTO> UpdateOrder([FromRoute] int id, [FromBody] OrderDTO updatedOrderDTO)
         {
             if (id < 1)

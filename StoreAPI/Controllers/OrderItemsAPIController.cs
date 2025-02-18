@@ -9,7 +9,7 @@ namespace StoreAPI.Controllers
 {
     [Route("API/OrderItemsAPI")]
     [ApiController]
-    [Authorize] // Apply Authorize attribute at the controller level to require authentication for all actions
+    //[Authorize] // Apply Authorize attribute at the controller level to require authentication for all actions
     public class OrderItemsAPIController : ControllerBase
     {
         private readonly clsOrderItemsBL _orderItemsBL;
@@ -65,19 +65,23 @@ namespace StoreAPI.Controllers
             return Ok(orderItemsList);
         }
 
+
+
+
+
         [HttpPost("Create", Name = "AddOrderItem")]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status201Created)]
-        [Authorize] // Restrict creation to admin and manager roles
+        //[Authorize] // Restrict creation to admin and manager roles
 
-        public ActionResult<OrderItemDTO> AddOrderItem(OrderItemDTO newOrderItemDTO)
+        public async Task<ActionResult<OrderItemDTO>> AddOrderItem(OrderItemDTO newOrderItemDTO)
         {
             if (!ModelState.IsValid)
             {
                 return BadRequest(ModelState);
             }
             _orderItemsBL.DTO = newOrderItemDTO;
-            if (_orderItemsBL.Save())
+            if (await _orderItemsBL.Save())
             {
 
                 return CreatedAtRoute("GetOrderItemByOrderItemID", new { id = _orderItemsBL.DTO.OrderItemID }, newOrderItemDTO);
@@ -94,7 +98,7 @@ namespace StoreAPI.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [Authorize] // Restrict update to admin and manager roles
 
-        public ActionResult<OrderItemDTO> UpdateOrderItem([FromRoute] int id, [FromBody] OrderItemDTO updatedOrderItemDTO)
+        public async Task<ActionResult<OrderItemDTO>> UpdateOrderItem([FromRoute] int id, [FromBody] OrderItemDTO updatedOrderItemDTO)
         {
             if (id < 1)
                 return BadRequest($"Not Accepted ID {id}");
@@ -109,7 +113,7 @@ namespace StoreAPI.Controllers
             if (orderItemBL == null)
                 return NotFound($"There is no order item with ID = {id}");
             orderItemBL.DTO = updatedOrderItemDTO;
-            if (orderItemBL.Save())
+            if (await orderItemBL.Save())
             {
                 return Ok(updatedOrderItemDTO);
             }
@@ -126,13 +130,13 @@ namespace StoreAPI.Controllers
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [Authorize] // Restrict deletion to admin role
 
-        public ActionResult DeleteOrderItem([FromRoute] int id)
+        public async Task<ActionResult> DeleteOrderItem([FromRoute] int id)
         {
             if (id <= 0)
                 return BadRequest($"Please enter a valid ID = {id}");
             if (!_orderItemsBL.IsOrderItemExistsByOrderItemID(id))
                 return NotFound($"There is no order item with ID = {id}");
-            if (_orderItemsBL.DeleteOrderItemByOrderItemID(id))
+            if (await _orderItemsBL.DeleteOrderItemByOrderItemID(id))
                 return Ok($"The order item was deleted successfully with ID = {id}");
             else
                 return StatusCode(500, $"ERROR, the order item was NOT deleted. No rows were affected!");
