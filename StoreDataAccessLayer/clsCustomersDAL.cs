@@ -3,6 +3,7 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel;
 using Npgsql;
 using Dapper;
+using System.Diagnostics;
 
 namespace StoreDataAccessLayer
 {
@@ -98,10 +99,80 @@ namespace StoreDataAccessLayer
             }
             return list;
         }
-
-
-
         public (List<CustomerDTO> CustomersList, int TotalCount) GetCustomersPaginatedWithFilters(
+int pageNumber,
+int pageSize,
+int? customerID,
+string? firstName,
+string? lastName,
+string? email,
+string? phone,
+DateTime? registeredAt,
+bool? isActive)
+        {
+            //MeasureExecutionTime();
+            try
+            {
+                int totalCount = 0;
+                // Parameters for the stored function
+                var parameters = new
+                {
+                    p_page_number = pageNumber,
+                    p_page_size = pageSize,
+                    p_customer_id = customerID,
+                    p_first_name = firstName,
+                    p_last_name = lastName,
+                    p_email = email,
+                    p_phone = phone,
+                    p_registered_at = registeredAt,
+                    p_is_active = isActive,
+                };
+
+                // Query to call the stored function
+                string query = "SELECT * FROM fn_get_customers_paginated_with_filters(" +
+                               "@p_page_number, @p_page_size, @p_customer_id, @p_first_name, @p_last_name, " +
+                               "@p_email, @p_phone, @p_registered_at, @p_is_active)";
+
+                // Execute the stored function
+                using var conn = _dataSource.OpenConnection();
+                var result = conn.Query(query, parameters);
+
+                // Extract the total count from the first row
+                //{{DapperRow, customer_id = '1', first_name = 'First11 Name', last_name = 'Last Name'
+                //, email = 'a@a.a', phone = '999', registered_at = '1/2/2025 10:24:06 AM', is_active = 'True', total_count = '1000'}}
+                var customersList = result.Select(row => new CustomerDTO
+                {
+                    CustomerID = row.customer_id,
+                    FirstName = row.first_name,
+                    LastName = row.last_name,
+                    Email = row.email,
+                    Phone = row.phone,
+                    RegisteredAt = row.registered_at,
+                    IsActive = row.is_active,
+                }).ToList();
+                if (result.Any())
+                {
+                    totalCount = (int)result.First().total_count; // Assuming TotalCount is a property in CustomerDTO
+                }
+                return (customersList, totalCount);
+
+            }
+            catch (NpgsqlException ex)
+            {
+                Console.WriteLine($"Database error: {ex.Message}");
+                throw;
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"General error: {ex.Message}"); throw;
+
+            }
+        }
+
+
+
+        public (List<CustomerDTO> CustomersList, int TotalCount) GetCustomersPaginatedWithFiltersWithOutStoredMethodTest(
     int pageNumber, int pageSize, int? customerID, string? firstName,
     string? lastName, string? email, string? phone, DateTime? registeredAt, bool? isActive)
         {
@@ -235,12 +306,108 @@ namespace StoreDataAccessLayer
 
             return (customersList, totalCount);
         }
+        public (List<CustomerDTO> CustomersList, int TotalCount) GetCustomersPaginatedWithFiltersTest(
+ int pageNumber,
+ int pageSize,
+ int? customerID,
+ string? firstName,
+ string? lastName,
+ string? email,
+ string? phone,
+ DateTime? registeredAt,
+ bool? isActive)
+        {
+
+            int totalCount = 0;
+
+            try
+            {
+                // Parameters for the stored function
+                var parameters = new
+                {
+                    p_page_number = pageNumber,
+                    p_page_size = pageSize,
+                    p_customer_id = customerID,
+                    p_first_name = firstName,
+                    p_last_name = lastName,
+                    p_email = email,
+                    p_phone = phone,
+                    p_registered_at = registeredAt,
+                    p_is_active = isActive,
+                };
+
+                // Query to call the stored function
+                string query = "SELECT * FROM fn_get_customers_paginated_with_filters(" +
+                               "@p_page_number, @p_page_size, @p_customer_id, @p_first_name, @p_last_name, " +
+                               "@p_email, @p_phone, @p_registered_at, @p_is_active)";
+
+                // Execute the stored function
+                using var conn = _dataSource.OpenConnection();
+                var result = conn.Query(query, parameters);
+
+                // Extract the total count from the first row
+                //{{DapperRow, customer_id = '1', first_name = 'First11 Name', last_name = 'Last Name'
+                //, email = 'a@a.a', phone = '999', registered_at = '1/2/2025 10:24:06 AM', is_active = 'True', total_count = '1000'}}
+                var customersList = result.Select(row => new CustomerDTO
+                {
+                    CustomerID = row.customer_id,
+                    FirstName = row.first_name,
+                    LastName = row.last_name,
+                    Email = row.email,
+                    Phone = row.phone,
+                    RegisteredAt = row.registered_at,
+                    IsActive = row.is_active,
+                }).ToList();
+                if (result.Any())
+                {
+                    totalCount = (int)result.First().total_count; // Assuming TotalCount is a property in CustomerDTO
+                }
+                return (customersList, totalCount);
+
+            }
+            catch (NpgsqlException ex)
+            {
+                Console.WriteLine($"Database error: {ex.Message}");
+                throw;
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"General error: {ex.Message}"); throw;
+
+            }
+        }
 
 
 
 
 
+        public void MeasureExecutionTime()
+        {
+            int pageNumber = 1;
+            int pageSize = 10;
+            int? customerID = null;
+            string? firstName = null;
+            string? lastName = null;
+            string? email = null;
+            string? phone = null;
+            DateTime? registeredAt = null;
+            bool? isActive = null;
 
+            // Measure execution time for the original method
+            Stopwatch stopwatch1 = Stopwatch.StartNew();
+            var result1 = GetCustomersPaginatedWithFiltersWithOutStoredMethodTest(pageNumber, pageSize, customerID, firstName, lastName, email, phone, registeredAt, isActive);
+            stopwatch1.Stop();
+            Console.WriteLine($"Original Method Execution Time: {stopwatch1.ElapsedMilliseconds} ms");
+
+            // Measure execution time for the updated method (using stored function)
+            Stopwatch stopwatch2 = Stopwatch.StartNew();
+            var result2 = GetCustomersPaginatedWithFiltersTest(pageNumber, pageSize, customerID, firstName, lastName, email, phone, registeredAt, isActive);
+            stopwatch2.Stop();
+            Console.WriteLine($"Stored Function Method Execution Time: {stopwatch2.ElapsedMilliseconds} ms");
+            Console.WriteLine("\n----------------------------------\n");
+
+        }
 
 
 

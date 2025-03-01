@@ -3,6 +3,8 @@ using System.ComponentModel;
 using Npgsql;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Dapper;
+using System.Data;
+using System.Diagnostics;
 
 namespace StoreDataAccessLayer
 {
@@ -99,8 +101,75 @@ namespace StoreDataAccessLayer
 
 
         public (List<EmployeeDTO> EmployeesList, int TotalCount) GetEmployeesPaginatedWithFilters(
-    int pageNumber, int pageSize, int? employeeID, string? userName, string? email,
-    string? phone, string? role, bool? isActive)
+            int pageNumber, int pageSize, int? employeeID, string? userName, string? email,
+            string? phone, string? role, bool? isActive)
+        {
+            try
+            {
+                //MeasureExecutionTime();
+
+                // Define the parameters for the stored function
+                var parameters = new
+                {
+                    p_page_number = pageNumber,
+                    p_page_size = pageSize,
+                    p_employee_id = employeeID,
+                    p_user_name = userName,
+                    p_email = email,
+                    p_phone = phone,
+                    p_role = role,
+                    p_is_active = isActive
+                };
+
+                // Execute the stored function
+                using var conn = _dataSource.OpenConnection();
+                var result = conn.Query(@"
+            SELECT *
+            FROM fn_get_employees_paginated_with_filters(
+                p_page_number := @p_page_number,
+                p_page_size := @p_page_size,
+                p_employee_id := @p_employee_id,
+                p_user_name := @p_user_name,
+                p_email := @p_email,
+                p_phone := @p_phone,
+                p_role := @p_role,
+                p_is_active := @p_is_active
+            )", parameters);
+
+                // Map the result to EmployeeDTO objects
+                var employeesList = result.Select(row => new EmployeeDTO
+                {
+                    EmployeeID = row.employeeid,
+                    UserName = row.username,
+                    Email = row.email,
+                    Phone = row.phone,
+                    Role = row.role,
+                    IsActive = row.isactive
+                }).ToList();
+
+                // Extract the total count from the first row (all rows have the same total_count)
+                int totalCount = result.Any() ? (int)result.First().total_count : 0;
+
+                return (employeesList, totalCount);
+            }
+            catch (NpgsqlException ex)
+            {
+                Console.WriteLine($"Database error: {ex.Message}");
+                throw;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Unexpected error: {ex.Message}");
+                throw;
+            }
+        }
+
+
+
+        // Original method (manual SQL query)
+        public (List<EmployeeDTO> EmployeesList, int TotalCount) GetEmployeesPaginatedWithFilters1(
+            int pageNumber, int pageSize, int? employeeID, string? userName, string? email,
+            string? phone, string? role, bool? isActive)
         {
             var employeeList = new List<EmployeeDTO>();
             int totalCount = 0;
@@ -181,6 +250,96 @@ namespace StoreDataAccessLayer
             }
         }
 
+        // Updated method (using stored function)
+        public (List<EmployeeDTO> EmployeesList, int TotalCount) GetEmployeesPaginatedWithFiltersUsingFunction(
+            int pageNumber, int pageSize, int? employeeID, string? userName, string? email,
+            string? phone, string? role, bool? isActive)
+        {
+            try
+            {
+                // Define the parameters for the stored function
+                var parameters = new
+                {
+                    p_page_number = pageNumber,
+                    p_page_size = pageSize,
+                    p_employee_id = employeeID,
+                    p_user_name = userName,
+                    p_email = email,
+                    p_phone = phone,
+                    p_role = role,
+                    p_is_active = isActive
+                };
+
+                // Execute the stored function
+                using var conn = _dataSource.OpenConnection();
+                var result = conn.Query(@"
+                SELECT *
+                FROM fn_get_employees_paginated_with_filters(
+                    p_page_number := @p_page_number,
+                    p_page_size := @p_page_size,
+                    p_employee_id := @p_employee_id,
+                    p_user_name := @p_user_name,
+                    p_email := @p_email,
+                    p_phone := @p_phone,
+                    p_role := @p_role,
+                    p_is_active := @p_is_active
+                )", parameters);
+
+                // Map the result to EmployeeDTO objects
+                var employeesList = result.Select(row => new EmployeeDTO
+                {
+                    EmployeeID = row.employeeid,
+                    UserName = row.username,
+                    Email = row.email,
+                    Phone = row.phone,
+                    Role = row.role,
+                    IsActive = row.isactive
+                }).ToList();
+
+                // Extract the total count from the first row (all rows have the same total_count)
+
+                int totalCount = result.Any() ? Convert.ToInt32(result.First().total_count) : 0;
+
+                return (employeesList, totalCount);
+            }
+            catch (NpgsqlException ex)
+            {
+                Console.WriteLine($"Database error: {ex.Message}");
+                throw;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Unexpected error: {ex.Message}");
+                throw;
+            }
+        }
+
+        // Method to measure execution time
+        public void MeasureExecutionTime()
+        {
+            int pageNumber = 1;
+            int pageSize = 100;
+            int? employeeID = null;
+            string? userName = null;
+            string? email = null;
+            string? phone = null;
+            string? role = null;
+            bool? isActive = null;
+
+            // Measure execution time for the original method
+            Stopwatch stopwatch1 = Stopwatch.StartNew();
+            var result1 = GetEmployeesPaginatedWithFilters1(pageNumber, pageSize, employeeID, userName, email, phone, role, isActive);
+            stopwatch1.Stop();
+            Console.WriteLine($"Original Method Execution Time: {stopwatch1.ElapsedMilliseconds} ms");
+
+            // Measure execution time for the updated method (using stored function)
+            Stopwatch stopwatch2 = Stopwatch.StartNew();
+            var result2 = GetEmployeesPaginatedWithFiltersUsingFunction(pageNumber, pageSize, employeeID, userName, email, phone, role, isActive);
+            stopwatch2.Stop();
+            Console.WriteLine($"Stored Function Method Execution Time: {stopwatch2.ElapsedMilliseconds} ms");
+            Console.WriteLine("\n----------------------------------\n");
+
+        }
 
         public EmployeeDTO GetEmployeeByEmployeeID(int id)
         {
