@@ -21,3 +21,4 @@ appsettings.json
 *.dll
 *.exe
 *.pdb
+*.publishSettings
