@@ -25,10 +25,7 @@ namespace StoreBusinessLayer
             _employeesDAL = employeesDAL;
         }
 
-        public List<EmployeeDTO> GetAllEmployees()
-        {
-            return _employeesDAL.GetAllEmployees();
-        }
+
 
         public (List<EmployeeDTO> EmployeesList, int TotalCount) GetEmployeesPaginatedWithFilters(
      int pageNumber, int pageSize, int? employeeID, string? userName, string? email,
@@ -50,47 +47,6 @@ namespace StoreBusinessLayer
             }
         }
 
-        public clsEmployeesBL FindEmployeeByUserName(string userName)
-        {
-            EmployeeDTO dto = _employeesDAL.GetEmployeeByUserName(userName);
-
-            if (dto != null)
-            {
-                return new clsEmployeesBL(dto, enMode.Update);
-            }
-            else
-            {
-                return null;
-            }
-        }
-
-        public clsEmployeesBL FindEmployeeByEmail(string email)
-        {
-            EmployeeDTO dto = _employeesDAL.GetEmployeeByEmail(email);
-
-            if (dto != null)
-            {
-                return new clsEmployeesBL(dto, enMode.Update);
-            }
-            else
-            {
-                return null;
-            }
-        }
-
-        public clsEmployeesBL FindEmployeeByPhone(string phone)
-        {
-            EmployeeDTO dto = _employeesDAL.GetEmployeeByPhone(phone);
-
-            if (dto != null)
-            {
-                return new clsEmployeesBL(dto, enMode.Update);
-            }
-            else
-            {
-                return null;
-            }
-        }
 
         private bool _AddNewEmployee()
         {
@@ -174,19 +130,6 @@ namespace StoreBusinessLayer
             }
         }
 
-        public clsEmployeesBL GetEmployeeByEmployeeID(int id)
-        {
-            EmployeeDTO dto = _employeesDAL.GetEmployeeByEmployeeID(id);
-
-            if (dto != null)
-            {
-                return new clsEmployeesBL(dto, enMode.Update);
-            }
-            else
-            {
-                return null;
-            }
-        }
         public clsEmployeesBL GetEmployeeByUserName(string userName)
         {
             EmployeeDTO dto = _employeesDAL.GetEmployeeByUserName(userName);
@@ -228,10 +171,7 @@ namespace StoreBusinessLayer
                 }
             }
         }
-        public List<EmployeeDTO> GetEmployeesByRole(string role)
-        {
-            return _employeesDAL.GetEmployeesByRole(role);
-        }
+
 
         public bool IsEmployeeAdmin(int employeeID)
         {

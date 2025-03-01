@@ -17,24 +17,6 @@ namespace StoreAPI.Controllers
             _employeesBL = employeesBL;
         }
 
-        [HttpGet("GetAll", Name = "GetAllEmployees")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        [Authorize(Roles = "sales,marketing,admin")]
-        public ActionResult<IEnumerable<EmployeeDTO>> GetAllEmployees()
-        {
-            List<EmployeeDTO> employeesList = _employeesBL.GetAllEmployees();
-            if (employeesList.Count == 0)
-                return NotFound("There are no employees in the database!");
-            return Ok(employeesList);
-        }
-
-
-
-
-
-
-
         [HttpGet("GetEmployeesPaginatedWithFilters", Name = "GetEmployeesPaginatedWithFilters")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -61,20 +43,6 @@ namespace StoreAPI.Controllers
             });
         }
 
-        [HttpGet("GetEmployeeByID/{id}", Name = "GetEmployeeByEmployeeID")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        [Authorize(Roles = "sales,marketing,admin")]
-        public ActionResult<EmployeeDTO> GetEmployeeByID([FromRoute] int id)
-        {
-            if (id < 1)
-                return BadRequest($"Not Accepted ID {id}");
-            var employee = _employeesBL.GetEmployeeByEmployeeID(id);
-            if (employee == null)
-                return NotFound($"There is no employee with ID {id}");
-            return Ok(employee.DTO);
-        }
 
         [HttpGet("GetEmployeeByUserName/{userName}", Name = "GetEmployeeByUserName")]
         [ProducesResponseType(StatusCodes.Status200OK)]
@@ -191,56 +159,7 @@ namespace StoreAPI.Controllers
                 return StatusCode(500, "ERROR: The employee was not deleted. No rows were affected.");
         }
 
-        [HttpGet("GetEmployeeByEmailAndPassword/{email}/{password}", Name = "GetEmployeeByEmailAndPassword")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        [Authorize(Roles = "sales,marketing,admin")]
-        public ActionResult<EmployeeDTO> GetEmployeeByEmailAndPassword([FromRoute] string email, [FromRoute] string password)
-        {
-            if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
-                return BadRequest("Email and password are required.");
 
-            clsEmployeesBL employee = _employeesBL.GetEmployeeByEmailAndPassword(email, password);
-            if (employee == null)
-                return NotFound($"No employee found with the provided email and password.");
-
-            return Ok(employee.DTO);
-        }
-
-        [HttpGet("GetEmployeeByPhoneAndPassword/{phone}/{password}", Name = "GetEmployeeByPhoneAndPassword")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        [Authorize(Roles = "sales,marketing,admin")]
-        public ActionResult<EmployeeDTO> GetEmployeeByPhoneAndPassword([FromRoute] string phone, [FromRoute] string password)
-        {
-            if (string.IsNullOrEmpty(phone) || string.IsNullOrEmpty(password))
-                return BadRequest("Phone and password are required.");
-
-            clsEmployeesBL employee = _employeesBL.GetEmployeeByPhoneAndPassword(phone, password);
-            if (employee == null)
-                return NotFound($"No employee found with the provided phone and password.");
-
-            return Ok(employee.DTO);
-        }
-
-        [HttpGet("GetEmployeesByRole/{role}", Name = "GetEmployeesByRole")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        [Authorize(Roles = "sales,marketing,admin")]
-        public ActionResult<IEnumerable<EmployeeDTO>> GetEmployeesByRole([FromRoute] string role)
-        {
-            if (string.IsNullOrEmpty(role))
-                return BadRequest("Role cannot be empty.");
-
-            List<EmployeeDTO> employees = _employeesBL.GetEmployeesByRole(role);
-            if (employees.Count == 0)
-                return NotFound($"No employees found with the role {role}.");
-
-            return Ok(employees);
-        }
 
         [HttpGet("IsEmployeeAdmin/{employeeID}", Name = "IsEmployeeAdmin")]
         [ProducesResponseType(StatusCodes.Status200OK)]

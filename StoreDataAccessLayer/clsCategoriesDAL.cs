@@ -131,31 +131,6 @@ namespace StoreDataAccessLayer
             return (categoriesList, totalCount);
         }
 
-        public List<CategoryDTO> GetActiveCategoriesWithProducts()
-        {
-            var categoriesList = new List<CategoryDTO>();
-            try
-            {
-                using (var conn = _dataSource.OpenConnection())
-                {
-                    var query = @"
-                        SELECT DISTINCT c.categoryID, c.categoryName, c.parentCategoryID, c.isActive
-                        FROM Categories c
-                        JOIN Products p ON c.categoryID = p.categoryID
-                        WHERE c.isActive = true AND c.parentCategoryID IS NULL;";
-                    categoriesList = conn.Query<CategoryDTO>(query).AsList();
-                }
-            }
-            catch (NpgsqlException ex)
-            {
-                Console.WriteLine($"Error retrieving categories: {ex.Message}");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error retrieving categories: {ex.Message}");
-            }
-            return categoriesList;
-        }
 
         public async Task<List<CategoryDTO>> GetActiveCategoriesWithProductsAsync()
         {

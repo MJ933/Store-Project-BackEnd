@@ -26,10 +26,6 @@ namespace StoreBusinessLayer
             _customersDAL = customersDAL;
         }
 
-        public List<CustomerDTO> GetAllCustomers()
-        {
-            return _customersDAL.GetAllCustomers();
-        }
         public (List<CustomerDTO> CustomersList, int TotalCount) GetCustomersPaginatedWithFilters(
     int pageNumber, int pageSize, int? customerID, string? firstName,
     string? lastName, string? email, string? phone, DateTime? registeredAt, bool? isActive)
@@ -128,10 +124,6 @@ namespace StoreBusinessLayer
             return _customersDAL.IsCustomerExistsByCustomerID(id);
         }
 
-        public bool IsCustomerExistsByCustomerFirstName(string name)
-        {
-            return _customersDAL.IsCustomerExistsByCustomerFirstName(name);
-        }
 
         public bool IsCustomerExistsByCustomerPhone(string phone)
         {

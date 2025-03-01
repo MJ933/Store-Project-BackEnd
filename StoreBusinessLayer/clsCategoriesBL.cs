@@ -36,10 +36,6 @@ namespace StoreBusinessLayer
             return _categoriesDAL.GetCategoriesPaginatedWithFilters(pageNumber, pageSize, categoryID, categoryName, parentCategoryID, isActive);
         }
 
-        public List<CategoryDTO> GetActiveCategoriesWithProducts()
-        {
-            return _categoriesDAL.GetActiveCategoriesWithProducts();
-        }
 
         public async Task<List<CategoryDTO>> GetActiveCategoriesWithProductsAsync()
         {

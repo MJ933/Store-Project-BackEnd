@@ -53,16 +53,6 @@ namespace StoreAPI.Controllers
             });
         }
 
-        [HttpGet("GetActiveCategoriesWithProducts")]
-        [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(List<CategoryDTO>))]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public IActionResult GetActiveCategoriesWithProducts()
-        {
-            var categories = _categoryBL.GetActiveCategoriesWithProducts();
-            if (categories.Count == 0)
-                return NotFound("No categories found.");
-            return Ok(categories);
-        }
 
         [HttpGet("GetActiveCategoriesWithProductsAsync")]
         [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(List<CategoryDTO>))]

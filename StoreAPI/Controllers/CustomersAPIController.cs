@@ -18,18 +18,6 @@ namespace StoreAPI.Controllers
             _customersBL = customersBL;
         }
 
-        [HttpGet("GetAll", Name = "GetAllCustomers")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        [Authorize(Roles = "sales,marketing,admin")]
-        public ActionResult<IEnumerable<CustomerDTO>> GetAllCustomers()
-        {
-            var customers = _customersBL.GetAllCustomers();
-            if (customers.Count == 0)
-                return NotFound("No customers found.");
-            return Ok(customers);
-        }
-
 
 
         [HttpGet("GetCustomersPaginatedWithFilters", Name = "GetCustomersPaginatedWithFilters")]
