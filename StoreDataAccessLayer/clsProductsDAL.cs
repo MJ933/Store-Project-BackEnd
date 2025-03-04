@@ -12,6 +12,8 @@ using static System.Net.Mime.MediaTypeNames;
 using System.Text.Json;
 using System.Data.Common;
 using Dapper;
+using Newtonsoft.Json;
+
 namespace StoreDataAccessLayer
 {
     public class ProductDTO
@@ -43,11 +45,11 @@ namespace StoreDataAccessLayer
         public string ProductName { get; set; }
 
         [Required]
-        [Range(1, int.MaxValue, ErrorMessage = "Should be a Positive number!")]
+        [Range(0.001, float.MaxValue, ErrorMessage = "Should be a Positive number!")]
         public decimal InitialPrice { get; set; }
 
         [Required]
-        [Range(1, int.MaxValue, ErrorMessage = "Should be a Positive number!")]
+        [Range(0.001, float.MaxValue, ErrorMessage = "Should be a Positive number!")]
         public decimal SellingPrice { get; set; }
 
         [DefaultValue("The Description of the product.")]
@@ -101,148 +103,80 @@ namespace StoreDataAccessLayer
         }
 
 
+
         public async Task<(List<FullProductDTO> Products, int TotalCount)> GetProductsPaginatedWithFiltersAllImagesAsync(
-int pageNumber,
-int pageSize,
-int? productID, string? productName, int? initialPrice, int? sellingPrice, string? description,
-int? categoryId, int? quantity, bool? isActive
-)
+            int pageNumber,
+            int pageSize,
+            int? productID, string? productName, decimal? initialPrice, decimal? sellingPrice, string? description,
+            int? categoryId, int? quantity, bool? isActive
+        )
         {
-            var fullProducts = new List<FullProductDTO>();
+            List<FullProductDTO> ProductsList = new List<FullProductDTO>();
             int totalCount = 0;
 
             try
             {
-                int offset = (pageNumber - 1) * pageSize;
-
                 await using var conn = await _dataSource.OpenConnectionAsync();
-
-                // Step 1: Build the count query with dynamic conditions (same as before)
-                string countQuery = "SELECT COUNT(*) FROM Products p";
-                var countConditions = new List<string>();
-
-                if (productID.HasValue)
-                    countConditions.Add("p.ProductID = @ProductID");
-                if (!string.IsNullOrEmpty(productName))
-                    countConditions.Add("p.ProductName ILIKE @ProductName");
-                if (initialPrice.HasValue)
-                    countConditions.Add("p.InitialPrice = @InitialPrice");
-                if (sellingPrice.HasValue)
-                    countConditions.Add("p.SellingPrice = @SellingPrice");
-                if (!string.IsNullOrEmpty(description))
-                    countConditions.Add("p.Description ILIKE @Description");
-                if (categoryId.HasValue)
-                    countConditions.Add("p.CategoryID = @CategoryID");
-                if (quantity.HasValue)
-                    countConditions.Add("p.StockQuantity = @Quantity");
-                if (isActive.HasValue)
-                    countConditions.Add("p.IsActive = @IsActive");
-
-
-                if (countConditions.Any())
-                    countQuery += " WHERE " + string.Join(" AND ", countConditions);
-
-                // Parameters for count query (same as before)
-                var countParams = new
-                {
-                    ProductID = productID,
-                    ProductName = !string.IsNullOrEmpty(productName) ? $"%{productName}%" : null,
-                    InitialPrice = initialPrice,
-                    SellingPrice = sellingPrice,
-                    Description = !string.IsNullOrEmpty(description) ? $"%{description}%" : null,
-                    CategoryID = categoryId,
-                    Quantity = quantity,
-                    IsActive = isActive
-                };
-                totalCount = await conn.ExecuteScalarAsync<int>(countQuery, countParams);
-
-                // Step 2: Build the products query with dynamic conditions (using CTE for all images)
-                string productsQuery = @"
-            WITH PagedProducts AS (
-                SELECT p.productid
-                FROM Products p
-                WHERE (@ProductID IS NULL OR p.ProductID = @ProductID)
-                  AND (@ProductName IS NULL OR p.ProductName ILIKE @ProductName)
-                  AND (@InitialPrice IS NULL OR p.InitialPrice = @InitialPrice)
-                  AND (@SellingPrice IS NULL OR p.SellingPrice = @SellingPrice)
-                  AND (@Description IS NULL OR p.Description ILIKE @Description)
-                  AND (@CategoryID IS NULL OR p.CategoryID = @CategoryID)
-                  AND (@Quantity IS NULL OR p.StockQuantity = @Quantity)
-                  AND (@IsActive IS NULL OR p.IsActive = @IsActive)
-                ORDER BY p.productid
-                LIMIT @PageSize OFFSET @Offset
-            )
-            SELECT
-                p.*,
-                i.ImageID,
-                i.ImageURL,
-                i.IsPrimary,
-                i.FileId
-            FROM PagedProducts pp
-            JOIN Products p ON pp.productid = p.productid
-            LEFT JOIN Images i ON p.ProductID = i.ProductID
-            ORDER BY p.productid, i.ImageID;
-        ";
-
-
-                // Parameters for products query (same as before)
+                string functionQuery = @"
+                    SELECT * FROM fn_get_products_and_all_images_paginated_with_filters(
+                        @p_page_number,
+                        @p_page_size,
+                        @p_product_id,
+                        @p_product_name,
+                        @p_initial_price,
+                        @p_selling_price,
+                        @p_description,
+                        @p_category_id,
+                        @p_quantity,
+                        @p_is_active
+                    );";
                 var queryParams = new
                 {
-                    PageSize = pageSize,
-                    Offset = offset,
-                    ProductID = productID,
-                    ProductName = !string.IsNullOrEmpty(productName) ? $"%{productName}%" : null,
-                    InitialPrice = initialPrice,
-                    SellingPrice = sellingPrice,
-                    Description = !string.IsNullOrEmpty(description) ? $"%{description}%" : null,
-                    CategoryID = categoryId,
-                    Quantity = quantity,
-                    IsActive = isActive
+                    p_page_number = pageNumber,
+                    p_page_size = pageSize,
+                    p_product_id = productID,
+                    p_product_name = productName,
+                    p_initial_price = initialPrice,
+                    p_selling_price = sellingPrice,
+                    p_description = description,
+                    p_category_id = categoryId,
+                    p_quantity = quantity,
+                    p_is_active = isActive
                 };
+                var result = await conn.QueryAsync<dynamic>(functionQuery, queryParams);
 
-                var results = await conn.QueryAsync<dynamic>(productsQuery, queryParams);
-
-                var productDictionary = new Dictionary<int, FullProductDTO>();
-
-                foreach (var item in results)
+                foreach (var row in result)
                 {
-                    int productId = item.productid;
 
-                    if (!productDictionary.ContainsKey(productId))
+                    var product = new ProductDTO
                     {
-                        var product = new ProductDTO(
-                            item.productid,
-                            item.productname,
-                            item.initialprice,
-                            item.sellingprice,
-                            item.description,
-                            item.categoryid,
-                            item.stockquantity,
-                            item.isactive
-                        );
-                        productDictionary[productId] = new FullProductDTO(product, new List<ImageDatabaseDTO>());
+                        ProductID = (int)row.product_id,
+                        ProductName = (string)row.product_name,
+                        InitialPrice = (decimal)row.initial_price,
+                        SellingPrice = (decimal)row.selling_price,
+                        Description = (string)row.description,
+                        CategoryID = (int)row.category_id,
+                        StockQuantity = (int)row.quantity,
+                        IsActive = (bool)row.is_active
+                    };
+                    var images = new List<ImageDatabaseDTO>();
+
+                    if (row.images != null)
+                    {
+                        images = JsonConvert.DeserializeObject<List<ImageDatabaseDTO>>(row.images?.ToString() ?? string.Empty);
                     }
-
-                    if (item.imageid != null)
+                    ProductsList.Add(new FullProductDTO(product, images));
+                    if (totalCount == 0 && (row.total_count != null))
                     {
-                        ImageDatabaseDTO image = new ImageDatabaseDTO(
-                            item.imageid,
-                            item.imageurl,
-                            item.productid,
-                            item.isprimary,
-                            item.fileid
-                        );
-                        productDictionary[productId].Images.Add(image);
+                        totalCount = Convert.ToInt32(row.total_count);
                     }
                 }
-                fullProducts = productDictionary.Values.ToList();
             }
             catch (Exception ex)
             {
                 Console.WriteLine(ex.ToString());
             }
-
-            return (fullProducts, totalCount);
+            return (ProductsList, totalCount);
         }
 
 

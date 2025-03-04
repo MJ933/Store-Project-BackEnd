@@ -22,9 +22,9 @@ namespace StoreAPI.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [Authorize]
-        public ActionResult<IEnumerable<OrderDTO>> GetAllOrders()
+        public async Task<ActionResult<IEnumerable<OrderDTO>>> GetAllOrders()
         {
-            var ordersList = _ordersBL.GetAllOrders();
+            var ordersList = await _ordersBL.GetAllOrders();
             if (ordersList.Count == 0)
                 return NotFound("There are no orders in the database!");
             return Ok(ordersList);
@@ -35,7 +35,7 @@ namespace StoreAPI.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public ActionResult<IEnumerable<OrderDTO>> GetOrdersPaginatedWithFilters( // Changed return type to object or a custom PagedResult<OrderDTO>
+        public async Task<ActionResult<IEnumerable<OrderDTO>>> GetOrdersPaginatedWithFilters( // Changed return type to object or a custom PagedResult<OrderDTO>
             [FromQuery] int pageNumber = 1,
             [FromQuery] int pageSize = 10,
             [FromQuery] int? orderID = null,
@@ -55,7 +55,7 @@ namespace StoreAPI.Controllers
                 return BadRequest("Page size must be greater than or equal to 1.");
 
             // Call the paging method from clsOrdersDAL
-            var result = _ordersBL.GetOrdersPaginatedWithFilters(pageNumber, pageSize, orderID, customerID, orderDate,
+            var result = await _ordersBL.GetOrdersPaginatedWithFilters(pageNumber, pageSize, orderID, customerID, orderDate,
                 total, orderStatus, shippingAddress, notes);
 
             // Handle empty results
@@ -79,11 +79,11 @@ namespace StoreAPI.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [Authorize(Roles = "sales,marketing,admin")]
-        public ActionResult<OrderDTO> GetOrderByID([FromRoute] int id)
+        public async Task<ActionResult<OrderDTO>> GetOrderByID([FromRoute] int id)
         {
             if (id < 1)
                 return BadRequest($"Invalid ID: {id}");
-            var orderBL = _ordersBL.GetOrderByOrderID(id);
+            var orderBL = await _ordersBL.GetOrderByOrderID(id);
             if (orderBL == null)
                 return NotFound($"No order found with ID: {id}");
             return Ok(orderBL.DTO);
@@ -94,31 +94,28 @@ namespace StoreAPI.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [Authorize]
-        public ActionResult<IEnumerable<OrderDTO>> GetOrdersByCustomerID([FromRoute] int id)
+        public async Task<ActionResult<IEnumerable<OrderDTO>>> GetOrdersByCustomerID([FromRoute] int id)
         {
             if (id < 1)
                 return BadRequest($"Invalid Customer ID: {id}");
-            var ordersList = _ordersBL.GetOrderByCustomerID(id);
+            var ordersList = await _ordersBL.GetOrderByCustomerID(id);
             if (ordersList.Count == 0)
                 return NotFound($"No orders found for Customer ID: {id}");
             return Ok(ordersList);
         }
 
 
-
-
-
         [HttpPost("Create", Name = "AddOrder")]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status201Created)]
-        public ActionResult<OrderDTO> AddOrder([FromBody] OrderDTO newOrderDTO)
+        public async Task<ActionResult<OrderDTO>> AddOrder([FromBody] OrderDTO newOrderDTO)
         {
             if (!ModelState.IsValid)
             {
                 return BadRequest(ModelState);
             }
             clsOrdersBL orderBL = new clsOrdersBL(newOrderDTO);
-            if (orderBL.Save())
+            if (await orderBL.Save())
             {
                 return CreatedAtRoute("GetOrderByOrderID", new { id = orderBL.DTO.OrderID }, newOrderDTO);
             }
@@ -133,7 +130,7 @@ namespace StoreAPI.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [Authorize(Roles = "sales,admin")]
-        public ActionResult<OrderDTO> UpdateOrder([FromRoute] int id, [FromBody] OrderDTO updatedOrderDTO)
+        public async Task<ActionResult<OrderDTO>> UpdateOrder([FromRoute] int id, [FromBody] OrderDTO updatedOrderDTO)
         {
             if (id < 1)
                 return BadRequest($"Invalid ID: {id}");
@@ -142,11 +139,11 @@ namespace StoreAPI.Controllers
             {
                 return BadRequest(ModelState);
             }
-            var orderBL = _ordersBL.GetOrderByOrderID(id);
+            var orderBL = await _ordersBL.GetOrderByOrderID(id);
             if (orderBL == null)
                 return NotFound($"No order found with ID: {id}");
             orderBL.DTO = updatedOrderDTO;
-            if (orderBL.Save())
+            if (await orderBL.Save())
             {
                 return Ok(updatedOrderDTO);
             }
@@ -162,13 +159,13 @@ namespace StoreAPI.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [Authorize]
-        public ActionResult DeleteOrder([FromRoute] int id)
+        public async Task<ActionResult> DeleteOrder([FromRoute] int id)
         {
             if (id <= 0)
                 return BadRequest($"Invalid ID: {id}");
-            if (!_ordersBL.IsOrderExistsByOrderID(id))
+            if (!await _ordersBL.IsOrderExistsByOrderID(id))
                 return NotFound($"No order found with ID: {id}");
-            if (_ordersBL.DeleteOrderByOrderID(id))
+            if (await _ordersBL.DeleteOrderByOrderID(id))
                 return Ok($"Order with ID: {id} was deleted successfully.");
             else
                 return StatusCode(500, "Failed to delete the order.");
@@ -179,15 +176,15 @@ namespace StoreAPI.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [Authorize]
-        public ActionResult UpdateOrderStatus([FromRoute] int id, [FromBody] string status)
+        public async Task<ActionResult> UpdateOrderStatus([FromRoute] int id, [FromBody] string status)
         {
             if (id < 1)
                 return BadRequest($"Invalid ID: {id}");
             if (string.IsNullOrEmpty(status))
                 return BadRequest("Status cannot be empty.");
-            if (!_ordersBL.IsOrderExistsByOrderID(id))
+            if (!await _ordersBL.IsOrderExistsByOrderID(id))
                 return NotFound($"No order found with ID: {id}");
-            if (_ordersBL.UpdateOrderStatusByOrderID(id, status))
+            if (await _ordersBL.UpdateOrderStatusByOrderID(id, status))
                 return Ok($"Order status updated to: {status}");
             else
                 return BadRequest("Failed to update the order status.");

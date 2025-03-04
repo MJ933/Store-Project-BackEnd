@@ -22,7 +22,7 @@ namespace StoreBusinessLayer
 
 
         public async Task<(List<FullProductDTO> Products, int TotalCount)> GetProductsPaginatedWithFiltersAllImagesAsync(
-            int pageNumber, int pageSize, int? productID, string? productName, int? initialPrice, int? sellingPrice, string? description,
+            int pageNumber, int pageSize, int? productID, string? productName, decimal? initialPrice, decimal? sellingPrice, string? description,
             int? categoryId, int? quantity, bool? isActive)
         {
             return await _productsDAL.GetProductsPaginatedWithFiltersAllImagesAsync(pageNumber, pageSize, productID, productName, initialPrice,
@@ -43,7 +43,7 @@ namespace StoreBusinessLayer
             else
             {
                 Console.WriteLine("Product not found or an error occurred.");
-                return null;
+                return new ProductDTO();
             }
         }
 
