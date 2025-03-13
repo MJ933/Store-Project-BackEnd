@@ -22,7 +22,7 @@ namespace StoreAPI.Controllers
         [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(LoginResponse))]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        public IActionResult LoginCustomerByEmail([FromBody] LoginRequestByEmail request)
+        public async Task<IActionResult> LoginCustomerByEmail([FromBody] LoginRequestByEmail request)
         {
             // Validate input
             if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
@@ -30,7 +30,7 @@ namespace StoreAPI.Controllers
                 return BadRequest(new { message = "Email and password are required." });
             }
 
-            var customer = _customersBL.GetCustomerByEmailAndPassword(request.Email, request.Password);
+            var customer = await _customersBL.GetCustomerByEmailAndPassword(request.Email, request.Password);
             if (customer == null)
             {
                 return Unauthorized(new { message = "Invalid email or password." });
@@ -45,7 +45,7 @@ namespace StoreAPI.Controllers
         [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(LoginResponse))]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        public IActionResult LoginCustomerByPhone([FromBody] LoginRequestByPhone request)
+        public async Task<IActionResult> LoginCustomerByPhone([FromBody] LoginRequestByPhone request)
         {
             // Validate input
             if (string.IsNullOrWhiteSpace(request.Phone) || string.IsNullOrWhiteSpace(request.Password))
@@ -53,7 +53,7 @@ namespace StoreAPI.Controllers
                 return BadRequest(new { message = "Phone number and password are required." });
             }
 
-            var customer = _customersBL.GetCustomerByPhoneAndPassword(request.Phone, request.Password);
+            var customer = await _customersBL.GetCustomerByPhoneAndPassword(request.Phone, request.Password);
             if (customer == null)
             {
                 return Unauthorized(new { message = "Invalid phone number or password." });
@@ -64,12 +64,11 @@ namespace StoreAPI.Controllers
             return Ok(new { Token = token });
         }
 
-
         [HttpPost("LoginEmployeeByEmail")]
         [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(LoginResponse))]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        public IActionResult LoginEmployeeByEmail([FromBody] LoginRequestByEmail request)
+        public async Task<IActionResult> LoginEmployeeByEmail([FromBody] LoginRequestByEmail request)
         {
             // Validate input
             if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
@@ -77,7 +76,7 @@ namespace StoreAPI.Controllers
                 return BadRequest(new { message = "Email and password are required." });
             }
 
-            var employee = _employeesBL.GetEmployeeByEmailAndPassword(request.Email, request.Password);
+            var employee = await _employeesBL.GetEmployeeByEmailAndPassword(request.Email, request.Password);
             if (employee == null)
             {
                 return Unauthorized(new { message = "Invalid email or password." });
@@ -94,7 +93,7 @@ namespace StoreAPI.Controllers
         [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(LoginResponse))]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        public IActionResult LoginEmployeeByPhone([FromBody] LoginRequestByPhone request)
+        public async Task<IActionResult> LoginEmployeeByPhone([FromBody] LoginRequestByPhone request)
         {
             // Validate input
             if (string.IsNullOrWhiteSpace(request.Phone) || string.IsNullOrWhiteSpace(request.Password))
@@ -102,7 +101,7 @@ namespace StoreAPI.Controllers
                 return BadRequest(new { message = "Phone number and password are required." });
             }
 
-            var employee = _employeesBL.GetEmployeeByPhoneAndPassword(request.Phone, request.Password);
+            var employee = await _employeesBL.GetEmployeeByPhoneAndPassword(request.Phone, request.Password);
             if (employee == null)
             {
                 return Unauthorized(new { message = "Invalid phone number or password." });

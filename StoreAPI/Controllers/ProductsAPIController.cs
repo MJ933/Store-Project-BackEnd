@@ -13,9 +13,9 @@ namespace StoreAPI.Controllers
     public class ProductsAPIController : ControllerBase
     {
         private readonly clsProductsBL _productsBL;
-        private readonly clsCategoriesBL _categoryBL;
+        private readonly CategoriesService _categoryBL;
 
-        public ProductsAPIController(clsProductsBL productsBL, clsCategoriesBL categoryBL)
+        public ProductsAPIController(clsProductsBL productsBL, CategoriesService categoryBL)
         {
             _productsBL = productsBL;
             _categoryBL = categoryBL;
@@ -84,7 +84,7 @@ namespace StoreAPI.Controllers
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
-            if (!_categoryBL.IsCategoryExistsByCategoryID(newProductDTO.CategoryID))
+            if (!await _categoryBL.IsCategoryExistsByCategoryIDAsync(newProductDTO.CategoryID))
                 return BadRequest("The Category Is Not Exists, please select another category!");
             newProductDTO.ProductID = await _productsBL.AddNewProductAsync(newProductDTO);
             if (newProductDTO.ProductID > 0)

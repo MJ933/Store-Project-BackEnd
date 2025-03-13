@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using StoreBusinessLayer;
 using StoreDataAccessLayer;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace StoreAPI.Controllers
 {
@@ -18,13 +19,11 @@ namespace StoreAPI.Controllers
             _customersBL = customersBL;
         }
 
-
-
         [HttpGet("GetCustomersPaginatedWithFilters", Name = "GetCustomersPaginatedWithFilters")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [Authorize(Roles = "sales,marketing,admin")]
-        public ActionResult<IEnumerable<CustomerDTO>> GetCustomersPaginatedWithFilters(
+        public async Task<ActionResult> GetCustomersPaginatedWithFilters(
             [FromQuery] int pageNumber = 1,
             [FromQuery] int pageSize = 10,
             [FromQuery] int? customerID = null,
@@ -35,51 +34,61 @@ namespace StoreAPI.Controllers
             [FromQuery] DateTime? registeredAt = null,
             [FromQuery] bool? isActive = null)
         {
-            // Call the DAL method with the provided filters
-            var result = _customersBL.GetCustomersPaginatedWithFilters(
-                pageNumber,
-                pageSize,
-                customerID,
-                firstName,
-                lastName,
-                email,
-                phone,
-                registeredAt,
-                isActive
-            );
-
-            // Check if any customers were found
-            if (result.CustomersList.Count == 0)
+            try
             {
-                return NotFound("No customers found matching the specified filters.");
+                var result = await _customersBL.GetCustomersPaginatedWithFilters(
+                    pageNumber,
+                    pageSize,
+                    customerID,
+                    firstName,
+                    lastName,
+                    email,
+                    phone,
+                    registeredAt,
+                    isActive
+                );
+
+                if (result.CustomersList.Count == 0)
+                {
+                    return NotFound("No customers found matching the specified filters.");
+                }
+
+                return Ok(new
+                {
+                    TotalCount = result.TotalCount,
+                    PageNumber = pageNumber,
+                    PageSize = pageSize,
+                    Customers = result.CustomersList
+                });
             }
-
-            // Return the paginated list of customers
-            return Ok(new
+            catch (Exception ex)
             {
-                TotalCount = result.TotalCount,
-                PageNumber = pageNumber,
-                PageSize = pageSize,
-                Customers = result.CustomersList
-            });
+                return StatusCode(StatusCodes.Status500InternalServerError, $"An error occurred: {ex.Message}");
+            }
         }
-
-
-
 
         [HttpGet("GetCustomerByID/{id}", Name = "GetCustomerByCustomerID")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [Authorize(Roles = "sales,marketing,admin")]
-        public ActionResult<CustomerDTO> GetCustomerByID([FromRoute] int id)
+        public async Task<ActionResult<CustomerDTO>> GetCustomerByID([FromRoute] int id)
         {
             if (id < 1)
                 return BadRequest("Invalid customer ID.");
-            var customer = _customersBL.GetCustomerByCustomerID(id);
-            if (customer == null)
-                return NotFound($"Customer with ID {id} not found.");
-            return Ok(customer.DTO);
+
+            try
+            {
+                var customer = await _customersBL.GetCustomerByCustomerID(id);
+                if (customer == null)
+                    return NotFound($"Customer with ID {id} not found.");
+
+                return Ok(customer.DTO);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, $"An error occurred: {ex.Message}");
+            }
         }
 
         [HttpGet("GetCustomerByPhone/{phone}", Name = "GetCustomerByPhone")]
@@ -87,14 +96,23 @@ namespace StoreAPI.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [Authorize]
-        public ActionResult<CustomerDTO> GetCustomerByPhone([FromRoute] string phone)
+        public async Task<ActionResult<CustomerDTO>> GetCustomerByPhone([FromRoute] string phone)
         {
             if (string.IsNullOrEmpty(phone))
                 return BadRequest("Phone number is required.");
-            var customer = _customersBL.GetCustomerByCustomerPhone(phone);
-            if (customer == null)
-                return NotFound($"Customer with phone {phone} not found.");
-            return Ok(customer.DTO);
+
+            try
+            {
+                var customer = await _customersBL.GetCustomerByCustomerPhone(phone);
+                if (customer == null)
+                    return NotFound($"Customer with phone {phone} not found.");
+
+                return Ok(customer.DTO);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, $"An error occurred: {ex.Message}");
+            }
         }
 
         [HttpGet("GetCustomerByEmail/{email}", Name = "GetCustomerByEmail")]
@@ -102,39 +120,55 @@ namespace StoreAPI.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [Authorize]
-        public ActionResult<CustomerDTO> GetCustomerByEmail([FromRoute] string email)
+        public async Task<ActionResult<CustomerDTO>> GetCustomerByEmail([FromRoute] string email)
         {
             if (string.IsNullOrEmpty(email))
                 return BadRequest("Email is required.");
-            var customer = _customersBL.GetCustomerByCustomerEmail(email);
-            if (customer == null)
-                return NotFound($"Customer with email {email} not found.");
-            return Ok(customer.DTO);
+
+            try
+            {
+                var customer = await _customersBL.GetCustomerByCustomerEmail(email);
+                if (customer == null)
+                    return NotFound($"Customer with email {email} not found.");
+
+                return Ok(customer.DTO);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, $"An error occurred: {ex.Message}");
+            }
         }
 
         [HttpPost("Create", Name = "AddCustomer")]
         [ProducesResponseType(StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status409Conflict)]
-        public ActionResult<CustomerDTO> AddCustomer([FromBody] CustomerDTO newCustomerDTO)
+        public async Task<ActionResult<CustomerDTO>> AddCustomer([FromBody] CustomerDTO newCustomerDTO)
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            if (_customersBL.IsCustomerExistsByCustomerEmail(newCustomerDTO.Email))
-                return Conflict("Customer email already exists.");
-
-            if (_customersBL.IsCustomerExistsByCustomerPhone(newCustomerDTO.Phone))
-                return Conflict("Customer phone already exists.");
-
-            var customerBL = new clsCustomersBL(newCustomerDTO);
-            if (customerBL.Save())
+            try
             {
-                return CreatedAtAction(nameof(GetCustomerByID), new { id = newCustomerDTO.CustomerID }, newCustomerDTO);
+                if (await _customersBL.IsCustomerExistsByCustomerEmail(newCustomerDTO.Email))
+                    return Conflict("Customer email already exists.");
+
+                if (await _customersBL.IsCustomerExistsByCustomerPhone(newCustomerDTO.Phone))
+                    return Conflict("Customer phone already exists.");
+
+                var customerBL = new clsCustomersBL(newCustomerDTO);
+                if (await customerBL.Save())
+                {
+                    return CreatedAtAction(nameof(GetCustomerByID), new { id = newCustomerDTO.CustomerID }, newCustomerDTO);
+                }
+                else
+                {
+                    return BadRequest("Failed to add customer.");
+                }
             }
-            else
+            catch (Exception ex)
             {
-                return BadRequest("Failed to add customer.");
+                return StatusCode(StatusCodes.Status500InternalServerError, $"An error occurred: {ex.Message}");
             }
         }
 
@@ -143,27 +177,35 @@ namespace StoreAPI.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [Authorize]
-        public ActionResult<CustomerDTO> UpdateCustomer([FromRoute] int id, [FromBody] CustomerDTO updatedCustomerDTO)
+        public async Task<ActionResult<CustomerDTO>> UpdateCustomer([FromRoute] int id, [FromBody] CustomerDTO updatedCustomerDTO)
         {
             if (id < 1)
                 return BadRequest("Invalid customer ID.");
+
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            var customerBL = _customersBL.GetCustomerByCustomerID(id);
-            if (customerBL == null)
-                return NotFound($"There is no Customer with ID = {id}");
-
-            updatedCustomerDTO.CustomerID = id;
-            customerBL.DTO = updatedCustomerDTO;
-
-            if (customerBL.Save())
+            try
             {
-                return Ok(updatedCustomerDTO);
+                var customerBL = await _customersBL.GetCustomerByCustomerID(id);
+                if (customerBL == null)
+                    return NotFound($"There is no Customer with ID = {id}");
+
+                updatedCustomerDTO.CustomerID = id;
+                customerBL.DTO = updatedCustomerDTO;
+
+                if (await customerBL.Save())
+                {
+                    return Ok(updatedCustomerDTO);
+                }
+                else
+                {
+                    return BadRequest("Failed to update customer.");
+                }
             }
-            else
+            catch (Exception ex)
             {
-                return BadRequest("Failed to update customer.");
+                return StatusCode(StatusCodes.Status500InternalServerError, $"An error occurred: {ex.Message}");
             }
         }
 
@@ -172,20 +214,28 @@ namespace StoreAPI.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [Authorize(Roles = "admin")]
-        public ActionResult DeleteCustomer([FromRoute] int id)
+        public async Task<ActionResult> DeleteCustomer([FromRoute] int id)
         {
             if (id < 1)
                 return BadRequest("Invalid customer ID.");
-            if (!_customersBL.IsCustomerExistsByCustomerID(id))
-                return NotFound($"Customer with ID {id} not found.");
 
-            if (_customersBL.DeleteCustomerByCustomerID(id))
+            try
             {
-                return Ok($"Customer with ID {id} deleted successfully.");
+                if (!await _customersBL.IsCustomerExistsByCustomerID(id))
+                    return NotFound($"Customer with ID {id} not found.");
+
+                if (await _customersBL.DeleteCustomerByCustomerID(id))
+                {
+                    return Ok($"Customer with ID {id} deleted successfully.");
+                }
+                else
+                {
+                    return BadRequest("Failed to delete customer.");
+                }
             }
-            else
+            catch (Exception ex)
             {
-                return BadRequest("Failed to delete customer.");
+                return StatusCode(StatusCodes.Status500InternalServerError, $"An error occurred: {ex.Message}");
             }
         }
 
@@ -194,16 +244,23 @@ namespace StoreAPI.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [Authorize(Roles = "sales,marketing,admin")]
-        public ActionResult<CustomerDTO> GetCustomerByEmailAndPassword([FromRoute] string email, [FromRoute] string password)
+        public async Task<ActionResult<CustomerDTO>> GetCustomerByEmailAndPassword([FromRoute] string email, [FromRoute] string password)
         {
             if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
                 return BadRequest("Email and password are required.");
 
-            clsCustomersBL customer = _customersBL.GetCustomerByEmailAndPassword(email, password);
-            if (customer == null)
-                return NotFound($"No Customer found with the provided email and password.");
+            try
+            {
+                var customer = await _customersBL.GetCustomerByEmailAndPassword(email, password);
+                if (customer == null)
+                    return NotFound($"No Customer found with the provided email and password.");
 
-            return Ok(customer.DTO);
+                return Ok(customer.DTO);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, $"An error occurred: {ex.Message}");
+            }
         }
 
         [HttpGet("GetCustomerByPhoneAndPassword/{phone}/{password}", Name = "GetCustomerByPhoneAndPassword")]
@@ -211,16 +268,23 @@ namespace StoreAPI.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [Authorize(Roles = "sales,marketing,admin")]
-        public ActionResult<CustomerDTO> GetCustomerByPhoneAndPassword([FromRoute] string phone, [FromRoute] string password)
+        public async Task<ActionResult<CustomerDTO>> GetCustomerByPhoneAndPassword([FromRoute] string phone, [FromRoute] string password)
         {
             if (string.IsNullOrEmpty(phone) || string.IsNullOrEmpty(password))
                 return BadRequest("Phone and password are required.");
 
-            clsCustomersBL customer = _customersBL.GetCustomerByPhoneAndPassword(phone, password);
-            if (customer == null)
-                return NotFound($"No Customer found with the provided phone and password.");
+            try
+            {
+                var customer = await _customersBL.GetCustomerByPhoneAndPassword(phone, password);
+                if (customer == null)
+                    return NotFound($"No Customer found with the provided phone and password.");
 
-            return Ok(customer.DTO);
+                return Ok(customer.DTO);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, $"An error occurred: {ex.Message}");
+            }
         }
     }
 }

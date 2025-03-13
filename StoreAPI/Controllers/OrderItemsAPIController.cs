@@ -55,11 +55,11 @@ namespace StoreAPI.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [Authorize] // Already authorized at controller level, keep this if you want to override controller level auth.
 
-        public ActionResult<IEnumerable<OrderItemDTO>> GetAllOrderItemsByOrderID([FromRoute] int id)
+        public async Task<ActionResult<IEnumerable<OrderItemDTO>>> GetAllOrderItemsByOrderID([FromRoute] int id)
         {
             if (id < 1)
                 return BadRequest($"Not Accepted ID {id}");
-            var orderItemsList = _orderItemsBL.GetAllOrderItemsByOrderID(id);
+            var orderItemsList = await _orderItemsBL.GetAllOrderItemsByOrderID(id);
             if (orderItemsList.Count == 0)
                 return NotFound("There are no order items in the database!");
             return Ok(orderItemsList);

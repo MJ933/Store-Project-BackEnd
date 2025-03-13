@@ -32,14 +32,14 @@ builder.Services.AddScoped<clsProductsBL>();
 
 builder.Services.AddScoped<clsImagesDAL>();
 builder.Services.AddScoped<clsImagesBL>();
-builder.Services.AddScoped<clsCategoriesDAL>();
-builder.Services.AddScoped<clsCategoriesBL>();
+builder.Services.AddScoped<ICategoriesRepository, CategoriesRepository>();
+builder.Services.AddScoped<ICategoriesService, CategoriesService>();
 builder.Services.AddScoped<clsCustomersDAL>();
 builder.Services.AddScoped<clsCustomersBL>();
 builder.Services.AddScoped<clsEmployeesDAL>();
 builder.Services.AddScoped<clsEmployeesBL>();
-builder.Services.AddScoped<clsOrdersDAL>();
-builder.Services.AddScoped<clsOrdersBL>();
+builder.Services.AddScoped<IOrdersRepository, OrdersRepository>();
+builder.Services.AddScoped<IOrdersService, OrdersService>();
 builder.Services.AddScoped<clsOrderItemsDAL>();
 builder.Services.AddScoped<clsOrderItemsBL>();
 
