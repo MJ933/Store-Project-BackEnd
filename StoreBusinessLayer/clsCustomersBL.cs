@@ -1,6 +1,7 @@
 ﻿using StoreDataAccessLayer;
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace StoreBusinessLayer
 {
@@ -22,20 +23,19 @@ namespace StoreBusinessLayer
 
         public clsCustomersBL(clsCustomersDAL customersDAL)
         {
-
             _customersDAL = customersDAL;
         }
 
-        public (List<CustomerDTO> CustomersList, int TotalCount) GetCustomersPaginatedWithFilters(
-    int pageNumber, int pageSize, int? customerID, string? firstName,
-    string? lastName, string? email, string? phone, DateTime? registeredAt, bool? isActive)
+        public async Task<(List<CustomerDTO> CustomersList, int TotalCount)> GetCustomersPaginatedWithFilters(
+            int pageNumber, int pageSize, int? customerID, string? firstName,
+            string? lastName, string? email, string? phone, DateTime? registeredAt, bool? isActive)
         {
-            return _customersDAL.GetCustomersPaginatedWithFilters(pageNumber, pageSize, customerID, firstName, lastName, email, phone, registeredAt, isActive);
+            return await _customersDAL.GetCustomersPaginatedWithFilters(pageNumber, pageSize, customerID, firstName, lastName, email, phone, registeredAt, isActive);
         }
 
-        public clsCustomersBL GetCustomerByCustomerID(int id)
+        public async Task<clsCustomersBL> GetCustomerByCustomerID(int id)
         {
-            CustomerDTO dto = _customersDAL.GetCustomerByCustomerID(id);
+            CustomerDTO dto = await _customersDAL.GetCustomerByCustomerID(id);
 
             if (dto != null)
             {
@@ -47,9 +47,9 @@ namespace StoreBusinessLayer
             }
         }
 
-        public clsCustomersBL GetCustomerByCustomerPhone(string phone)
+        public async Task<clsCustomersBL> GetCustomerByCustomerPhone(string phone)
         {
-            CustomerDTO dto = _customersDAL.GetCustomerByCustomerPhone(phone);
+            CustomerDTO dto = await _customersDAL.GetCustomerByCustomerPhone(phone);
 
             if (dto != null)
             {
@@ -61,9 +61,9 @@ namespace StoreBusinessLayer
             }
         }
 
-        public clsCustomersBL GetCustomerByCustomerEmail(string email)
+        public async Task<clsCustomersBL> GetCustomerByCustomerEmail(string email)
         {
-            CustomerDTO dto = _customersDAL.GetCustomerByCustomerEmail(email);
+            CustomerDTO dto = await _customersDAL.GetCustomerByCustomerEmail(email);
 
             if (dto != null)
             {
@@ -75,9 +75,9 @@ namespace StoreBusinessLayer
             }
         }
 
-        private bool _AddNewCustomer()
+        private async Task<bool> _AddNewCustomer()
         {
-            int customerID = _customersDAL.AddCustomer(this.DTO);
+            int customerID = await _customersDAL.AddCustomer(this.DTO);
             if (customerID > 0)
             {
                 this.DTO.CustomerID = customerID;
@@ -86,17 +86,17 @@ namespace StoreBusinessLayer
             return false;
         }
 
-        private bool _UpdateCustomer()
+        private async Task<bool> _UpdateCustomer()
         {
-            return _customersDAL.UpdateCustomer(this.DTO);
+            return await _customersDAL.UpdateCustomer(this.DTO);
         }
 
-        public bool Save()
+        public async Task<bool> Save()
         {
             switch (this.Mode)
             {
                 case enMode.AddNew:
-                    if (_AddNewCustomer())
+                    if (await _AddNewCustomer())
                     {
                         this.Mode = enMode.Update;
                         return true;
@@ -107,37 +107,36 @@ namespace StoreBusinessLayer
                     }
 
                 case enMode.Update:
-                    return _UpdateCustomer();
+                    return await _UpdateCustomer();
 
                 default:
                     return false;
             }
         }
 
-        public bool DeleteCustomerByCustomerID(int id)
+        public async Task<bool> DeleteCustomerByCustomerID(int id)
         {
-            return _customersDAL.DeleteCustomerByCustomerID(id);
+            return await _customersDAL.DeleteCustomerByCustomerID(id);
         }
 
-        public bool IsCustomerExistsByCustomerID(int id)
+        public async Task<bool> IsCustomerExistsByCustomerID(int id)
         {
-            return _customersDAL.IsCustomerExistsByCustomerID(id);
+            return await _customersDAL.IsCustomerExistsByCustomerID(id);
         }
 
-
-        public bool IsCustomerExistsByCustomerPhone(string phone)
+        public async Task<bool> IsCustomerExistsByCustomerPhone(string phone)
         {
-            return _customersDAL.IsCustomerExistsByCustomerPhone(phone);
+            return await _customersDAL.IsCustomerExistsByCustomerPhone(phone);
         }
 
-        public bool IsCustomerExistsByCustomerEmail(string email)
+        public async Task<bool> IsCustomerExistsByCustomerEmail(string email)
         {
-            return _customersDAL.IsCustomerExistsByCustomerEmail(email);
+            return await _customersDAL.IsCustomerExistsByCustomerEmail(email);
         }
 
-        public clsCustomersBL GetCustomerByEmailAndPassword(string email, string password)
+        public async Task<clsCustomersBL> GetCustomerByEmailAndPassword(string email, string password)
         {
-            CustomerDTO dto = _customersDAL.GetCustomerByEmailAndPassword(email, password);
+            CustomerDTO dto = await _customersDAL.GetCustomerByEmailAndPassword(email, password);
 
             if (dto != null)
             {
@@ -149,9 +148,9 @@ namespace StoreBusinessLayer
             }
         }
 
-        public clsCustomersBL GetCustomerByPhoneAndPassword(string phone, string password)
+        public async Task<clsCustomersBL> GetCustomerByPhoneAndPassword(string phone, string password)
         {
-            CustomerDTO dto = _customersDAL.GetCustomerByPhoneAndPassword(phone, password);
+            CustomerDTO dto = await _customersDAL.GetCustomerByPhoneAndPassword(phone, password);
 
             if (dto != null)
             {

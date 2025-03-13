@@ -1,4 +1,5 @@
-﻿using Npgsql;
+﻿using Dapper;
+using Npgsql;
 using System;
 using System.Collections.Generic;
 
@@ -86,63 +87,14 @@ namespace StoreDataAccessLayer
             return list;
         }
 
-        public List<OrderItemDTO> GetAllOrderItemsByOrderID(int id)
+        public async Task<List<OrderItemDTO>> GetAllOrderItemsByOrderID(int id)
         {
-            var list = new List<OrderItemDTO>();
             try
             {
-                using (var connection = _dataSource.OpenConnection())
-                using (NpgsqlCommand command = new NpgsqlCommand(@"
-SELECT DISTINCT ON (oi.orderitemid)
-    p.productName,
-    oi.orderitemid,
-    oi.orderid,
-    oi.productid,
-    oi.quantity,
-    oi.price,
-    img.imageUrl
-FROM
-    orderItems oi
-INNER JOIN
-    Products p ON p.productid = oi.productid
-LEFT JOIN  -- Changed from INNER JOIN to LEFT JOIN
-    images img ON oi.productid = img.productid
-WHERE
-    oi.orderid = @OrderID
-ORDER BY
-    oi.orderitemid,
-    CASE WHEN img.isprimary = TRUE THEN 0 ELSE 1 END,  -- Prioritize primary images when available
-    img.imageUrl;", connection))
-                {
-                    command.Parameters.AddWithValue("@OrderID", id);
-                    using (var reader = command.ExecuteReader())
-                    {
-                        // Get ordinals once outside the loop for efficiency
-                        int orderItemIdOrdinal = reader.GetOrdinal("OrderItemID");
-                        int orderIdOrdinal = reader.GetOrdinal("OrderID");
-                        int productIdOrdinal = reader.GetOrdinal("ProductID");
-                        int quantityOrdinal = reader.GetOrdinal("Quantity");
-                        int priceOrdinal = reader.GetOrdinal("Price");
-                        int imageUrlOrdinal = reader.GetOrdinal("ImageUrl");
-                        int productNameOrdinal = reader.GetOrdinal("ProductName");
+                await using var connection = _dataSource.OpenConnection();
+                var orders = await connection.QueryAsync<OrderItemDTO>("select * from fn_get_all_order_items_by_order_id(@p_order_id)", new { p_order_item_id = id });
+                return orders.ToList();
 
-
-                        while (reader.Read())
-                        {
-
-
-                            list.Add(new OrderItemDTO(
-                                reader.GetInt32(orderItemIdOrdinal),
-                                reader.GetInt32(orderIdOrdinal),
-                                reader.GetInt32(productIdOrdinal),
-                                reader.GetInt32(quantityOrdinal),
-                                reader.GetDecimal(priceOrdinal),
-                                reader.IsDBNull(imageUrlOrdinal) ? null : (string?)reader.GetString(imageUrlOrdinal),
-                                reader.GetString(productNameOrdinal)
-                            ));
-                        }
-                    }
-                }
             }
             catch (NpgsqlException ex)
             {
@@ -152,7 +104,7 @@ ORDER BY
             {
                 Console.WriteLine($"Exception in GetAllOrderItemsByOrderID (OrderID: {id}): {ex.Message}");
             }
-            return list;
+            return new List<OrderItemDTO>();
         }
 
         public OrderItemDTO GetOrderItemByOrderItemID(int id)

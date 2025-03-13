@@ -1,310 +1,312 @@
-﻿using Npgsql;
+﻿using Dapper;
+using Microsoft.Extensions.Logging;
+using Npgsql;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 using System.ComponentModel;
-using Dapper;
+using System.ComponentModel.DataAnnotations;
+using System.Data;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace StoreDataAccessLayer
 {
+    public interface ICategoriesRepository
+    {
+        Task<List<CategoryDTO>> GetAllCategoriesAsync();
+        Task<(List<CategoryDTO> CategoriesList, int TotalCount)> GetCategoriesPaginatedWithFiltersAsync(
+            int pageNumber, int pageSize, int? categoryID, string? categoryName, int? parentCategoryID, bool? isActive);
+        Task<List<CategoryDTO>> GetActiveCategoriesWithProductsAsync();
+        Task<CategoryDTO?> GetCategoryByCategoryIDAsync(int id);
+        Task<int> AddCategoryAsync(CategoryDTO newCategoryDTO);
+        Task<bool> UpdateCategoryAsync(CategoryDTO categoryDTO);
+        Task<bool> DeleteCategoryAsync(int categoryID);
+        Task<bool> IsCategoryExistsByCategoryIDAsync(int categoryID);
+        Task<bool> IsCategoryExistsByCategoryNameAsync(string name);
+    }
 
-    public class clsCategoriesDAL
+    public class CategoriesRepository : ICategoriesRepository
     {
         private readonly NpgsqlDataSource _dataSource;
+        private readonly ILogger<CategoriesRepository> _logger;
 
-        public clsCategoriesDAL(NpgsqlDataSource dataSource)
+        public CategoriesRepository(NpgsqlDataSource dataSource, ILogger<CategoriesRepository> logger)
         {
             _dataSource = dataSource ?? throw new ArgumentNullException(nameof(dataSource));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public List<CategoryDTO> GetAllCategories()
+        public async Task<List<CategoryDTO>> GetAllCategoriesAsync()
         {
-            var categoriesList = new List<CategoryDTO>();
             try
             {
-                using (var conn = _dataSource.OpenConnection())
-                {
-                    categoriesList = conn.Query<CategoryDTO>("SELECT * FROM Categories;").AsList();
-                }
-            }
-            catch (NpgsqlException ex)
-            {
-                Console.WriteLine($"Error retrieving categories: {ex.Message}");
+                const string sql = @"
+                    SELECT CategoryID, CategoryName, ParentCategoryID, IsActive
+                    FROM Categories
+                    ORDER BY CategoryID";
+
+                await using var connection = await _dataSource.OpenConnectionAsync();
+                var categories = await connection.QueryAsync<CategoryDTO>(sql);
+
+                return categories?.ToList() ?? new List<CategoryDTO>();
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error retrieving categories: {ex.Message}");
+                _logger.LogError(ex, "Error in GetAllCategoriesAsync");
+                return new List<CategoryDTO>();
             }
-            return categoriesList;
         }
 
-        public (List<CategoryDTO> CategoriesList, int TotalCount) GetCategoriesPaginatedWithFilters(
-      int pageNumber, int pageSize, int? categoryID, string? categoryName, int? parentCategoryID, bool? isActive)
+        public async Task<(List<CategoryDTO> CategoriesList, int TotalCount)> GetCategoriesPaginatedWithFiltersAsync(
+            int pageNumber, int pageSize, int? categoryID, string? categoryName, int? parentCategoryID, bool? isActive)
         {
-            var categoriesList = new List<CategoryDTO>();
-            int totalCount = 0;
-
             try
             {
-                // Calculate offset for pagination
                 int offset = (pageNumber - 1) * pageSize;
 
-                // Step 1: Build the count query with dynamic conditions
-                string countQuery = "SELECT COUNT(*) FROM Categories c";
-                var countConditions = new List<string>();
+                var parameters = new DynamicParameters();
+                parameters.Add("PageSize", pageSize);
+                parameters.Add("Offset", offset);
+                parameters.Add("CategoryID", categoryID);
+                parameters.Add("CategoryName", !string.IsNullOrEmpty(categoryName) ? $"%{categoryName}%" : null);
+                parameters.Add("ParentCategoryID", parentCategoryID);
+                parameters.Add("IsActive", isActive);
 
-                // Add conditions based on provided filters
-                if (categoryID.HasValue)
-                    countConditions.Add("c.CategoryID = @CategoryID");
-                if (!string.IsNullOrEmpty(categoryName))
-                    countConditions.Add("c.CategoryName ILIKE @CategoryName");
-                if (parentCategoryID.HasValue)
-                    countConditions.Add("c.ParentCategoryID = @ParentCategoryID");
-                if (isActive.HasValue)
-                    countConditions.Add("c.IsActive = @IsActive");
+                var whereConditions = new List<string>();
+                if (categoryID.HasValue) whereConditions.Add("c.CategoryID = @CategoryID");
+                if (!string.IsNullOrEmpty(categoryName)) whereConditions.Add("c.CategoryName ILIKE @CategoryName");
+                if (parentCategoryID.HasValue) whereConditions.Add("c.ParentCategoryID = @ParentCategoryID");
+                if (isActive.HasValue) whereConditions.Add("c.IsActive = @IsActive");
 
-                // Append conditions to the count query
-                if (countConditions.Any())
-                    countQuery += " WHERE " + string.Join(" AND ", countConditions);
+                string whereClause = whereConditions.Any() ? $" WHERE {string.Join(" AND ", whereConditions)}" : string.Empty;
 
-                // Parameters for count query
-                var countParams = new
-                {
-                    CategoryID = categoryID,
-                    CategoryName = !string.IsNullOrEmpty(categoryName) ? $"%{categoryName}%" : null,
-                    ParentCategoryID = parentCategoryID,
-                    IsActive = isActive
-                };
+                string countQuery = $@"
+                    SELECT COUNT(*) 
+                    FROM Categories c{whereClause}";
 
-                // Execute count query
-                using var conn = _dataSource.OpenConnection();
-                totalCount = conn.ExecuteScalar<int>(countQuery, countParams);
+                string categoriesQuery = $@"
+                    SELECT CategoryID, CategoryName, ParentCategoryID, IsActive 
+                    FROM Categories c{whereClause} 
+                    ORDER BY c.CategoryID 
+                    LIMIT @PageSize OFFSET @Offset";
 
-                // Step 2: Build the categories query with dynamic conditions
-                string categoriesQuery = "SELECT * FROM Categories c";
-                var categoriesConditions = new List<string>();
+                await using var connection = await _dataSource.OpenConnectionAsync();
+                int totalCount = await connection.ExecuteScalarAsync<int>(countQuery, parameters);
+                var categoriesList = await connection.QueryAsync<CategoryDTO>(categoriesQuery, parameters);
 
-                // Add conditions based on provided filters (same as count query)
-                if (categoryID.HasValue)
-                    categoriesConditions.Add("c.CategoryID = @CategoryID");
-                if (!string.IsNullOrEmpty(categoryName))
-                    categoriesConditions.Add("c.CategoryName ILIKE @CategoryName");
-                if (parentCategoryID.HasValue)
-                    categoriesConditions.Add("c.ParentCategoryID = @ParentCategoryID");
-                if (isActive.HasValue)
-                    categoriesConditions.Add("c.IsActive = @IsActive");
-
-
-                // Append conditions to the categories query
-                if (categoriesConditions.Any())
-                    categoriesQuery += " WHERE " + string.Join(" AND ", categoriesConditions);
-
-                // Add pagination
-                categoriesQuery += " ORDER BY c.CategoryID LIMIT @PageSize OFFSET @Offset;";
-
-                // Parameters for categories query
-                var categoryParams = new
-                {
-                    PageSize = pageSize,
-                    Offset = offset,
-                    CategoryID = categoryID,
-                    CategoryName = !string.IsNullOrEmpty(categoryName) ? $"%{categoryName}%" : null,
-                    ParentCategoryID = parentCategoryID,
-                    IsActive = isActive
-                };
-
-                // Execute categories query
-                var result = conn.Query<CategoryDTO>(categoriesQuery, categoryParams);
-                categoriesList = result.AsList();
-
-                return (categoriesList, totalCount);
-            }
-            catch (NpgsqlException ex)
-            {
-                Console.WriteLine($"Database error: {ex.Message}");
+                return (categoriesList?.ToList() ?? new List<CategoryDTO>(), totalCount);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"General error: {ex.Message}");
+                _logger.LogError(ex, $"Error in GetCategoriesPaginatedWithFiltersAsync: Page {pageNumber}, Size {pageSize}",
+                    pageNumber, pageSize);
+                return (new List<CategoryDTO>(), 0);
             }
-
-            return (categoriesList, totalCount);
         }
-
 
         public async Task<List<CategoryDTO>> GetActiveCategoriesWithProductsAsync()
         {
-            var categoriesList = new List<CategoryDTO>();
             try
             {
-                await using var conn = await _dataSource.OpenConnectionAsync();
-                var query = @"
-                    SELECT c.categoryID, c.categoryName, c.parentCategoryID, c.isActive
+                const string sql = @"
+                    SELECT c.CategoryID, c.CategoryName, c.ParentCategoryID, c.IsActive
                     FROM Categories c
-                    WHERE c.isActive = true 
-                      AND c.parentCategoryID IS NULL
-                      AND EXISTS (SELECT 1 FROM Products p WHERE p.categoryID = c.categoryID);";
-                categoriesList = (await conn.QueryAsync<CategoryDTO>(query)).AsList();
-            }
-            catch (NpgsqlException ex)
-            {
-                Console.WriteLine($"Error retrieving categories: {ex.Message}");
+                    WHERE c.IsActive = true 
+                      AND c.ParentCategoryID IS NULL
+                      AND EXISTS (SELECT 1 FROM Products p WHERE p.CategoryID = c.CategoryID)
+                    ORDER BY c.CategoryName";
+
+                await using var connection = await _dataSource.OpenConnectionAsync();
+                var categories = await connection.QueryAsync<CategoryDTO>(sql);
+
+                return categories?.ToList() ?? new List<CategoryDTO>();
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error retrieving categories: {ex.Message}");
+                _logger.LogError(ex, "Error in GetActiveCategoriesWithProductsAsync");
+                return new List<CategoryDTO>();
             }
-            return categoriesList;
         }
 
-        public CategoryDTO GetCategoryByCategoryID(int id)
+        public async Task<CategoryDTO?> GetCategoryByCategoryIDAsync(int id)
         {
             try
             {
-                using (var conn = _dataSource.OpenConnection())
-                {
-                    var query = "SELECT * FROM Categories WHERE CategoryID = @CategoryID LIMIT 1;";
-                    return conn.QueryFirstOrDefault<CategoryDTO>(query, new { CategoryID = id });
-                }
-            }
-            catch (NpgsqlException ex)
-            {
-                Console.WriteLine($"Error retrieving category: {ex.Message}");
+                const string sql = @"
+                    SELECT CategoryID, CategoryName, ParentCategoryID, IsActive
+                    FROM Categories 
+                    WHERE CategoryID = @CategoryID 
+                    LIMIT 1";
+
+                await using var connection = await _dataSource.OpenConnectionAsync();
+                return await connection.QuerySingleOrDefaultAsync<CategoryDTO>(sql, new { CategoryID = id });
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error retrieving category: {ex.Message}");
+                _logger.LogError(ex, "Error in GetCategoryByCategoryIDAsync for CategoryID: {CategoryID}", id);
+                return null;
             }
-            return null;
         }
 
-        public int AddCategory(CategoryDTO newCategoryDTO)
+        public async Task<int> AddCategoryAsync(CategoryDTO newCategoryDTO)
         {
             try
             {
-                using (var conn = _dataSource.OpenConnection())
+                const string sql = @"
+                    INSERT INTO Categories (CategoryName, ParentCategoryID, IsActive)
+                    VALUES (@CategoryName, @ParentCategoryID, @IsActive)
+                    RETURNING CategoryID";
+
+                var parameters = new
                 {
-                    var query = @"
-                        INSERT INTO Categories (CategoryName, ParentCategoryID, IsActive)
-                        VALUES (@CategoryName, @ParentCategoryID, @IsActive)
-                        RETURNING CategoryID;";
-                    return conn.ExecuteScalar<int>(query, newCategoryDTO);
-                }
+                    CategoryName = newCategoryDTO.CategoryName,
+                    ParentCategoryID = newCategoryDTO.ParentCategoryID,
+                    IsActive = newCategoryDTO.IsActive
+                };
+
+                await using var connection = await _dataSource.OpenConnectionAsync();
+                var insertedCategoryID = await connection.QuerySingleAsync<int>(sql, parameters);
+                return insertedCategoryID;
             }
-            catch (NpgsqlException ex)
+            catch (Exception ex)
             {
-                Console.WriteLine($"Error adding category: {ex.Message}");
+                _logger.LogError(ex, $"Error in AddCategoryAsync for CategoryName: {newCategoryDTO.CategoryName}",
+                    newCategoryDTO.CategoryName);
                 return 0;
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error adding category: {ex.Message}");
-                return 0;
-            }
         }
 
-        public bool UpdateCategory(CategoryDTO categoryDTO)
+        public async Task<bool> UpdateCategoryAsync(CategoryDTO categoryDTO)
         {
             try
             {
-                using (var conn = _dataSource.OpenConnection())
-                {
-                    var query = @"
-                        UPDATE Categories
-                        SET CategoryName = @CategoryName, 
-                            ParentCategoryID = @ParentCategoryID, 
-                            IsActive = @IsActive
-                        WHERE CategoryID = @CategoryID;";
-                    int rowsAffected = conn.Execute(query, categoryDTO);
-                    return rowsAffected > 0;
-                }
-            }
-            catch (NpgsqlException ex)
-            {
-                Console.WriteLine($"Error updating category: {ex.Message}");
-                return false;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error updating category: {ex.Message}");
-                return false;
-            }
-        }
+                const string sql = @"
+                    UPDATE Categories
+                    SET CategoryName = @CategoryName, 
+                        ParentCategoryID = @ParentCategoryID, 
+                        IsActive = @IsActive
+                    WHERE CategoryID = @CategoryID";
 
-        public bool DeleteCategory(int categoryID)
-        {
-            try
-            {
-                using (var conn = _dataSource.OpenConnection())
+                var parameters = new
                 {
-                    var query = "UPDATE Categories SET IsActive = FALSE WHERE CategoryID = @CategoryID;";
-                    int rowsAffected = conn.Execute(query, new { CategoryID = categoryID });
-                    return rowsAffected > 0;
-                }
-            }
-            catch (NpgsqlException ex)
-            {
-                Console.WriteLine($"Error deleting category: {ex.Message}");
-                return false;
+                    CategoryID = categoryDTO.CategoryID,
+                    CategoryName = categoryDTO.CategoryName,
+                    ParentCategoryID = categoryDTO.ParentCategoryID,
+                    IsActive = categoryDTO.IsActive
+                };
+
+                await using var connection = await _dataSource.OpenConnectionAsync();
+                int rowsAffected = await connection.ExecuteAsync(sql, parameters);
+
+                return rowsAffected > 0;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error deleting category: {ex.Message}");
+                _logger.LogError(ex, "Error in UpdateCategoryAsync for CategoryID: {CategoryID}",
+                    categoryDTO.CategoryID);
                 return false;
             }
         }
 
-        public bool IsCategoryExistsByCategoryID(int categoryID)
+        public async Task<bool> DeleteCategoryAsync(int categoryID)
         {
+            await using var connection = await _dataSource.OpenConnectionAsync();
+            await using var transaction = await connection.BeginTransactionAsync();
+
             try
             {
-                using (var conn = _dataSource.OpenConnection())
-                {
-                    var query = "SELECT 1 FROM Categories WHERE CategoryID = @CategoryID LIMIT 1;";
-                    return conn.ExecuteScalar<int?>(query, new { CategoryID = categoryID }) != null;
-                }
-            }
-            catch (NpgsqlException ex)
-            {
-                Console.WriteLine($"Error checking if category exists: {ex.Message}");
-                Console.WriteLine($"Inner Exception: {ex.InnerException?.Message}");
+                // First check if any products are using this category
+                const string checkProductsQuery = @"
+                    SELECT COUNT(*) 
+                    FROM Products 
+                    WHERE CategoryID = @CategoryID";
 
-                return false;
+                int productCount = await connection.ExecuteScalarAsync<int>(
+                    checkProductsQuery,
+                    new { CategoryID = categoryID },
+                    transaction);
+
+                // If products exist, just soft delete the category
+                const string sql = @"
+                    UPDATE Categories 
+                    SET IsActive = FALSE 
+                    WHERE CategoryID = @CategoryID";
+
+                int rowsAffected = await connection.ExecuteAsync(
+                    sql,
+                    new { CategoryID = categoryID },
+                    transaction);
+
+                if (rowsAffected <= 0)
+                {
+                    await transaction.RollbackAsync();
+                    return false;
+                }
+
+                await transaction.CommitAsync();
+                return true;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error checking if category exists: {ex.Message}");
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Error in DeleteCategoryAsync for CategoryID: {CategoryID}", categoryID);
                 return false;
             }
         }
 
-        public bool IsCategoryExistsByCategoryName(string name)
+        public async Task<bool> IsCategoryExistsByCategoryIDAsync(int categoryID)
         {
             try
             {
-                using (var conn = _dataSource.OpenConnection())
-                {
-                    var query = "SELECT 1 FROM Categories WHERE CategoryName = @CategoryName LIMIT 1;";
-                    return conn.ExecuteScalar<int?>(query, new { CategoryName = name }) != null;
-                }
-            }
-            catch (NpgsqlException ex)
-            {
-                Console.WriteLine($"Error checking if category exists: {ex.Message}");
-                return false;
+                const string sql = @"
+                    SELECT 1 
+                    FROM Categories 
+                    WHERE CategoryID = @CategoryID 
+                    LIMIT 1";
+
+                await using var connection = await _dataSource.OpenConnectionAsync();
+                var result = await connection.ExecuteScalarAsync<int?>(sql, new { CategoryID = categoryID });
+
+                return result.HasValue;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error checking if category exists: {ex.Message}");
+                _logger.LogError(ex, "Error in IsCategoryExistsByCategoryIDAsync for CategoryID: {CategoryID}",
+                    categoryID);
+                return false;
+            }
+        }
+
+        public async Task<bool> IsCategoryExistsByCategoryNameAsync(string name)
+        {
+            try
+            {
+                const string sql = @"
+                    SELECT 1 
+                    FROM Categories 
+                    WHERE LOWER(CategoryName) = LOWER(@CategoryName) 
+                    LIMIT 1";
+
+                await using var connection = await _dataSource.OpenConnectionAsync();
+                var result = await connection.ExecuteScalarAsync<int?>(sql, new { CategoryName = name });
+
+                return result.HasValue;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in IsCategoryExistsByCategoryNameAsync for CategoryName: {CategoryName}",
+                    name);
                 return false;
             }
         }
     }
 
-    public class CategoryDTO
+    public record CategoryDTO
     {
+        // Parameterless constructor for Dapper
         public CategoryDTO() { }
 
+        // Constructor for creating instances
         public CategoryDTO(int categoryID, string categoryName, int? parentCategoryID, bool isActive)
         {
             CategoryID = categoryID;
@@ -314,17 +316,16 @@ namespace StoreDataAccessLayer
         }
 
         [DefaultValue(1)]
-        public int CategoryID { get; set; }
+        public int CategoryID { get; init; }
 
         [Required(ErrorMessage = "Category Name Is Required!")]
         [StringLength(100, ErrorMessage = "The Name cannot exceed 100 characters")]
         [DefaultValue("Category Name")]
-        public string CategoryName { get; set; }
+        public string CategoryName { get; init; } = string.Empty;
 
-        public int? ParentCategoryID { get; set; }
+        public int? ParentCategoryID { get; init; }
 
         [DefaultValue(true)]
-        public bool IsActive { get; set; }
+        public bool IsActive { get; init; }
     }
-
 }

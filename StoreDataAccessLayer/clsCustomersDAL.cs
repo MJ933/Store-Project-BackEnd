@@ -56,6 +56,7 @@ namespace StoreDataAccessLayer
         public string Password { get; set; }
     }
 
+
     public class clsCustomersDAL
     {
         private readonly NpgsqlDataSource _dataSource;
@@ -65,22 +66,20 @@ namespace StoreDataAccessLayer
             _dataSource = dataSource ?? throw new ArgumentNullException(nameof(dataSource));
         }
 
-        public (List<CustomerDTO> CustomersList, int TotalCount) GetCustomersPaginatedWithFilters(
-int pageNumber,
-int pageSize,
-int? customerID,
-string? firstName,
-string? lastName,
-string? email,
-string? phone,
-DateTime? registeredAt,
-bool? isActive)
+        public async Task<(List<CustomerDTO> CustomersList, int TotalCount)> GetCustomersPaginatedWithFilters(
+            int pageNumber,
+            int pageSize,
+            int? customerID,
+            string? firstName,
+            string? lastName,
+            string? email,
+            string? phone,
+            DateTime? registeredAt,
+            bool? isActive)
         {
-            //MeasureExecutionTime();
             try
             {
-                int totalCount = 0;
-                // Parameters for the stored function
+                await using var conn = await _dataSource.OpenConnectionAsync();
                 var parameters = new
                 {
                     p_page_number = pageNumber,
@@ -94,18 +93,14 @@ bool? isActive)
                     p_is_active = isActive,
                 };
 
-                // Query to call the stored function
-                string query = "SELECT * FROM fn_get_customers_paginated_with_filters(" +
-                               "@p_page_number, @p_page_size, @p_customer_id, @p_first_name, @p_last_name, " +
-                               "@p_email, @p_phone, @p_registered_at, @p_is_active)";
+                string query = @"
+                    SELECT *
+                    FROM fn_get_customers_paginated_with_filters(
+                        @p_page_number, @p_page_size, @p_customer_id, @p_first_name, @p_last_name,
+                        @p_email, @p_phone, @p_registered_at, @p_is_active)";
 
-                // Execute the stored function
-                using var conn = _dataSource.OpenConnection();
-                var result = conn.Query(query, parameters);
+                var result = await conn.QueryAsync(query, parameters);
 
-                // Extract the total count from the first row
-                //{{DapperRow, customer_id = '1', first_name = 'First11 Name', last_name = 'Last Name'
-                //, email = 'a@a.a', phone = '999', registered_at = '1/2/2025 10:24:06 AM', is_active = 'True', total_count = '1000'}}
                 var customersList = result.Select(row => new CustomerDTO
                 {
                     CustomerID = row.customer_id,
@@ -116,85 +111,31 @@ bool? isActive)
                     RegisteredAt = row.registered_at,
                     IsActive = row.is_active,
                 }).ToList();
-                if (result.Any())
-                {
-                    totalCount = (int)result.First().total_count; // Assuming TotalCount is a property in CustomerDTO
-                }
-                return (customersList, totalCount);
 
+                int totalCount = result.Any() ? (int)result.First().total_count : 0;
+
+                return (customersList, totalCount);
             }
             catch (NpgsqlException ex)
             {
                 Console.WriteLine($"Database error: {ex.Message}");
                 throw;
-
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"General error: {ex.Message}"); throw;
-
+                Console.WriteLine($"General error: {ex.Message}");
+                throw;
             }
         }
 
-
-
-
-
-
-
-
-        //public void MeasureExecutionTime()
-        //{
-        //    int pageNumber = 1;
-        //    int pageSize = 10;
-        //    int? customerID = null;
-        //    string? firstName = null;
-        //    string? lastName = null;
-        //    string? email = null;
-        //    string? phone = null;
-        //    DateTime? registeredAt = null;
-        //    bool? isActive = null;
-
-        //    // Measure execution time for the original method
-        //    Stopwatch stopwatch1 = Stopwatch.StartNew();
-        //    var result1 = GetCustomersPaginatedWithFiltersWithOutStoredMethodTest(pageNumber, pageSize, customerID, firstName, lastName, email, phone, registeredAt, isActive);
-        //    stopwatch1.Stop();
-        //    Console.WriteLine($"Original Method Execution Time: {stopwatch1.ElapsedMilliseconds} ms");
-
-        //    // Measure execution time for the updated method (using stored function)
-        //    Stopwatch stopwatch2 = Stopwatch.StartNew();
-        //    var result2 = GetCustomersPaginatedWithFiltersTest(pageNumber, pageSize, customerID, firstName, lastName, email, phone, registeredAt, isActive);
-        //    stopwatch2.Stop();
-        //    Console.WriteLine($"Stored Function Method Execution Time: {stopwatch2.ElapsedMilliseconds} ms");
-        //    Console.WriteLine("\n----------------------------------\n");
-
-        //}
-
-        public CustomerDTO GetCustomerByCustomerID(int id)
+        public async Task<CustomerDTO> GetCustomerByCustomerID(int id)
         {
             try
             {
-                using (var conn = _dataSource.OpenConnection())
-                using (var cmd = new NpgsqlCommand("SELECT * FROM Customers WHERE CustomerID = @customerID LIMIT 1", conn))
-                {
-                    cmd.Parameters.AddWithValue("@customerID", id);
-                    using (var reader = cmd.ExecuteReader())
-                    {
-                        if (reader.Read())
-                        {
-                            return new CustomerDTO(
-                                reader.GetInt32(reader.GetOrdinal("CustomerID")),
-                                reader.GetString(reader.GetOrdinal("FirstName")),
-                                reader.GetString(reader.GetOrdinal("LastName")),
-                                reader.GetString(reader.GetOrdinal("Email")),
-                                reader.GetString(reader.GetOrdinal("Phone")),
-                                reader.GetDateTime(reader.GetOrdinal("RegisteredAt")),
-                                reader.GetBoolean(reader.GetOrdinal("IsActive")),
-                                reader.GetString(reader.GetOrdinal("Password"))
-                            );
-                        }
-                    }
-                }
+                await using var conn = await _dataSource.OpenConnectionAsync();
+                var query = "SELECT * FROM Customers WHERE CustomerID = @customerID LIMIT 1";
+                var customer = await conn.QueryFirstOrDefaultAsync<CustomerDTO>(query, new { customerID = id });
+                return customer ?? new CustomerDTO();
             }
             catch (NpgsqlException ex)
             {
@@ -207,31 +148,14 @@ bool? isActive)
             return null;
         }
 
-        public CustomerDTO GetCustomerByCustomerPhone(string phone)
+        public async Task<CustomerDTO> GetCustomerByCustomerPhone(string phone)
         {
             try
             {
-                using (var conn = _dataSource.OpenConnection())
-                using (var cmd = new NpgsqlCommand("SELECT * FROM Customers WHERE Phone = @phone LIMIT 1", conn))
-                {
-                    cmd.Parameters.AddWithValue("@phone", phone);
-                    using (var reader = cmd.ExecuteReader())
-                    {
-                        if (reader.Read())
-                        {
-                            return new CustomerDTO(
-                                reader.GetInt32(reader.GetOrdinal("CustomerID")),
-                                reader.GetString(reader.GetOrdinal("FirstName")),
-                                reader.GetString(reader.GetOrdinal("LastName")),
-                                reader.GetString(reader.GetOrdinal("Email")),
-                                reader.GetString(reader.GetOrdinal("Phone")),
-                                reader.GetDateTime(reader.GetOrdinal("RegisteredAt")),
-                                reader.GetBoolean(reader.GetOrdinal("IsActive")),
-                                reader.GetString(reader.GetOrdinal("Password"))
-                            );
-                        }
-                    }
-                }
+                await using var conn = await _dataSource.OpenConnectionAsync();
+                var query = "SELECT * FROM Customers WHERE Phone = @phone LIMIT 1";
+                var customer = await conn.QueryFirstOrDefaultAsync<CustomerDTO>(query, new { phone = phone });
+                return customer ?? new CustomerDTO();
             }
             catch (NpgsqlException ex)
             {
@@ -244,31 +168,14 @@ bool? isActive)
             return null;
         }
 
-        public CustomerDTO GetCustomerByCustomerEmail(string email)
+        public async Task<CustomerDTO> GetCustomerByCustomerEmail(string email)
         {
             try
             {
-                using (var conn = _dataSource.OpenConnection())
-                using (var cmd = new NpgsqlCommand("SELECT * FROM Customers WHERE Email = @email LIMIT 1", conn))
-                {
-                    cmd.Parameters.AddWithValue("@email", email);
-                    using (var reader = cmd.ExecuteReader())
-                    {
-                        if (reader.Read())
-                        {
-                            return new CustomerDTO(
-                                 reader.GetInt32(reader.GetOrdinal("CustomerID")),
-                                 reader.GetString(reader.GetOrdinal("FirstName")),
-                                 reader.GetString(reader.GetOrdinal("LastName")),
-                                 reader.GetString(reader.GetOrdinal("Email")),
-                                 reader.GetString(reader.GetOrdinal("Phone")),
-                                 reader.GetDateTime(reader.GetOrdinal("RegisteredAt")),
-                                 reader.GetBoolean(reader.GetOrdinal("IsActive")),
-                                 reader.GetString(reader.GetOrdinal("Password"))
-                             );
-                        }
-                    }
-                }
+                await using var conn = await _dataSource.OpenConnectionAsync();
+                var query = "SELECT * FROM Customers WHERE Email = @email LIMIT 1";
+                var customer = await conn.QueryFirstOrDefaultAsync<CustomerDTO>(query, new { email = email });
+                return customer ?? new CustomerDTO();
             }
             catch (NpgsqlException ex)
             {
@@ -281,28 +188,28 @@ bool? isActive)
             return null;
         }
 
-        public int AddCustomer(CustomerDTO dto)
+        public async Task<int> AddCustomer(CustomerDTO dto)
         {
             try
             {
-                using (var conn = _dataSource.OpenConnection())
-                using (var cmd = new NpgsqlCommand(
-                    "INSERT INTO Customers (FirstName, LastName, Email, Phone, RegisteredAt, IsActive, Password) " +
-                    "VALUES (@FirstName, @LastName, @Email, @Phone, @RegisteredAt, @IsActive, @Password) RETURNING CustomerID", conn))
+                await using var conn = await _dataSource.OpenConnectionAsync();
+                var query = @"
+                    INSERT INTO Customers (FirstName, LastName, Email, Phone, RegisteredAt, IsActive, Password)
+                    VALUES (@FirstName, @LastName, @Email, @Phone, @RegisteredAt, @IsActive, @Password)
+                    RETURNING CustomerID";
+
+                var queryParams = new
                 {
-                    cmd.Parameters.AddWithValue("@FirstName", dto.FirstName);
-                    cmd.Parameters.AddWithValue("@LastName", dto.LastName);
-                    cmd.Parameters.AddWithValue("@Email", dto.Email);
-                    cmd.Parameters.AddWithValue("@Phone", dto.Phone);
-                    cmd.Parameters.AddWithValue("@RegisteredAt", DateTime.Now);
-                    cmd.Parameters.AddWithValue("@IsActive", dto.IsActive);
-                    cmd.Parameters.AddWithValue("@Password", dto.Password);
-                    var result = cmd.ExecuteScalar();
-                    if (result != null)
-                    {
-                        return (int)result;
-                    }
-                }
+                    dto.FirstName,
+                    dto.LastName,
+                    dto.Email,
+                    dto.Phone,
+                    RegisteredAt = DateTime.Now,
+                    dto.IsActive,
+                    dto.Password
+                };
+
+                return await conn.ExecuteScalarAsync<int>(query, queryParams);
             }
             catch (NpgsqlException ex)
             {
@@ -315,25 +222,30 @@ bool? isActive)
             return 0;
         }
 
-        public bool UpdateCustomer(CustomerDTO dto)
+        public async Task<bool> UpdateCustomer(CustomerDTO dto)
         {
             try
             {
-                using (var conn = _dataSource.OpenConnection())
-                using (var cmd = new NpgsqlCommand(
-                    "UPDATE Customers SET FirstName = @FirstName, LastName = @LastName, Email = @Email, " +
-                    "Phone = @Phone, IsActive = @IsActive, Password = @Password WHERE CustomerID = @CustomerID", conn))
+                await using var conn = await _dataSource.OpenConnectionAsync();
+                var query = @"
+                    UPDATE Customers 
+                    SET FirstName = @FirstName, LastName = @LastName, Email = @Email,
+                        Phone = @Phone, IsActive = @IsActive, Password = @Password
+                    WHERE CustomerID = @CustomerID";
+
+                var queryParams = new
                 {
-                    cmd.Parameters.AddWithValue("@CustomerID", dto.CustomerID);
-                    cmd.Parameters.AddWithValue("@FirstName", dto.FirstName);
-                    cmd.Parameters.AddWithValue("@LastName", dto.LastName);
-                    cmd.Parameters.AddWithValue("@Email", dto.Email);
-                    cmd.Parameters.AddWithValue("@Phone", dto.Phone);
-                    cmd.Parameters.AddWithValue("@IsActive", dto.IsActive);
-                    cmd.Parameters.AddWithValue("@Password", dto.Password);
-                    int rowsAffected = cmd.ExecuteNonQuery();
-                    return rowsAffected > 0;
-                }
+                    dto.CustomerID,
+                    dto.FirstName,
+                    dto.LastName,
+                    dto.Email,
+                    dto.Phone,
+                    dto.IsActive,
+                    dto.Password
+                };
+
+                int rowsAffected = await conn.ExecuteAsync(query, queryParams);
+                return rowsAffected > 0;
             }
             catch (NpgsqlException ex)
             {
@@ -346,17 +258,14 @@ bool? isActive)
             return false;
         }
 
-        public bool DeleteCustomerByCustomerID(int id)
+        public async Task<bool> DeleteCustomerByCustomerID(int id)
         {
             try
             {
-                using (var conn = _dataSource.OpenConnection())
-                using (var cmd = new NpgsqlCommand("UPDATE Customers SET IsActive = false WHERE CustomerID = @customerID", conn))
-                {
-                    cmd.Parameters.AddWithValue("@customerID", id);
-                    int rowsAffected = cmd.ExecuteNonQuery();
-                    return rowsAffected > 0;
-                }
+                await using var conn = await _dataSource.OpenConnectionAsync();
+                var query = "UPDATE Customers SET IsActive = false WHERE CustomerID = @customerID";
+                int rowsAffected = await conn.ExecuteAsync(query, new { customerID = id });
+                return rowsAffected > 0;
             }
             catch (NpgsqlException ex)
             {
@@ -369,17 +278,14 @@ bool? isActive)
             return false;
         }
 
-        public bool IsCustomerExistsByCustomerID(int id)
+        public async Task<bool> IsCustomerExistsByCustomerID(int id)
         {
             try
             {
-                using (var conn = _dataSource.OpenConnection())
-                using (var cmd = new NpgsqlCommand("SELECT 1 FROM Customers WHERE CustomerID = @customerID LIMIT 1", conn))
-                {
-                    cmd.Parameters.AddWithValue("@customerID", id);
-                    var result = cmd.ExecuteScalar();
-                    return result != null;
-                }
+                await using var conn = await _dataSource.OpenConnectionAsync();
+                var query = "SELECT 1 FROM Customers WHERE CustomerID = @customerID LIMIT 1";
+                var result = await conn.ExecuteScalarAsync<int?>(query, new { customerID = id });
+                return result.HasValue;
             }
             catch (NpgsqlException ex)
             {
@@ -392,18 +298,14 @@ bool? isActive)
             return false;
         }
 
-
-        public bool IsCustomerExistsByCustomerPhone(string phone)
+        public async Task<bool> IsCustomerExistsByCustomerPhone(string phone)
         {
             try
             {
-                using (var conn = _dataSource.OpenConnection())
-                using (var cmd = new NpgsqlCommand("SELECT 1 FROM Customers WHERE Phone = @Phone LIMIT 1", conn))
-                {
-                    cmd.Parameters.AddWithValue("@Phone", phone);
-                    var result = cmd.ExecuteScalar();
-                    return result != null;
-                }
+                await using var conn = await _dataSource.OpenConnectionAsync();
+                var query = "SELECT 1 FROM Customers WHERE Phone = @Phone LIMIT 1";
+                var result = await conn.ExecuteScalarAsync<int?>(query, new { Phone = phone });
+                return result.HasValue;
             }
             catch (NpgsqlException ex)
             {
@@ -416,17 +318,14 @@ bool? isActive)
             return false;
         }
 
-        public bool IsCustomerExistsByCustomerEmail(string email)
+        public async Task<bool> IsCustomerExistsByCustomerEmail(string email)
         {
             try
             {
-                using (var conn = _dataSource.OpenConnection())
-                using (var cmd = new NpgsqlCommand("SELECT 1 FROM Customers WHERE Email = @Email LIMIT 1", conn))
-                {
-                    cmd.Parameters.AddWithValue("@Email", email);
-                    var result = cmd.ExecuteScalar();
-                    return result != null;
-                }
+                await using var conn = await _dataSource.OpenConnectionAsync();
+                var query = "SELECT 1 FROM Customers WHERE Email = @Email LIMIT 1";
+                var result = await conn.ExecuteScalarAsync<int?>(query, new { Email = email });
+                return result.HasValue;
             }
             catch (NpgsqlException ex)
             {
@@ -439,33 +338,14 @@ bool? isActive)
             return false;
         }
 
-        public CustomerDTO GetCustomerByEmailAndPassword(string email, string password)
+        public async Task<CustomerDTO> GetCustomerByEmailAndPassword(string email, string password)
         {
             try
             {
-                using (var conn = _dataSource.OpenConnection())
-                using (var cmd = new NpgsqlCommand(
-                    "SELECT * FROM Customers WHERE email = @Email AND password = @Password LIMIT 1", conn))
-                {
-                    cmd.Parameters.AddWithValue("@Email", email);
-                    cmd.Parameters.AddWithValue("@Password", password);
-                    using (var reader = cmd.ExecuteReader())
-                    {
-                        if (reader.Read())
-                        {
-                            return new CustomerDTO(
-                                reader.GetInt32(reader.GetOrdinal("CustomerID")),
-                                reader.GetString(reader.GetOrdinal("FirstName")),
-                                reader.GetString(reader.GetOrdinal("LastName")),
-                                reader.GetString(reader.GetOrdinal("Email")),
-                                reader.GetString(reader.GetOrdinal("Phone")),
-                                reader.GetDateTime(reader.GetOrdinal("RegisteredAt")),
-                                reader.GetBoolean(reader.GetOrdinal("IsActive")),
-                                reader.GetString(reader.GetOrdinal("Password"))
-                            );
-                        }
-                    }
-                }
+                await using var conn = await _dataSource.OpenConnectionAsync();
+                var query = "SELECT * FROM Customers WHERE Email = @Email AND Password = @Password LIMIT 1";
+                var customer = await conn.QueryFirstOrDefaultAsync<CustomerDTO>(query, new { Email = email, Password = password });
+                return customer ?? new CustomerDTO();
             }
             catch (NpgsqlException ex)
             {
@@ -478,33 +358,14 @@ bool? isActive)
             return null;
         }
 
-        public CustomerDTO GetCustomerByPhoneAndPassword(string phone, string password)
+        public async Task<CustomerDTO> GetCustomerByPhoneAndPassword(string phone, string password)
         {
             try
             {
-                using (var conn = _dataSource.OpenConnection())
-                using (var cmd = new NpgsqlCommand(
-                    "SELECT * FROM Customers WHERE Phone = @Phone AND Password = @Password LIMIT 1", conn))
-                {
-                    cmd.Parameters.AddWithValue("@Phone", phone);
-                    cmd.Parameters.AddWithValue("@Password", password);
-                    using (var reader = cmd.ExecuteReader())
-                    {
-                        if (reader.Read())
-                        {
-                            return new CustomerDTO(
-                                reader.GetInt32(reader.GetOrdinal("CustomerID")),
-                                reader.GetString(reader.GetOrdinal("FirstName")),
-                                reader.GetString(reader.GetOrdinal("LastName")),
-                                reader.GetString(reader.GetOrdinal("Email")),
-                                reader.GetString(reader.GetOrdinal("Phone")),
-                                reader.GetDateTime(reader.GetOrdinal("RegisteredAt")),
-                                reader.GetBoolean(reader.GetOrdinal("IsActive")),
-                                reader.GetString(reader.GetOrdinal("Password"))
-                            );
-                        }
-                    }
-                }
+                await using var conn = await _dataSource.OpenConnectionAsync();
+                var query = "SELECT * FROM Customers WHERE Phone = @Phone AND Password = @Password LIMIT 1";
+                var customer = await conn.QueryFirstOrDefaultAsync<CustomerDTO>(query, new { Phone = phone, Password = password });
+                return customer ?? new CustomerDTO();
             }
             catch (NpgsqlException ex)
             {

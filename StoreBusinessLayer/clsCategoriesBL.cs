@@ -1,113 +1,88 @@
-﻿using StoreDataAccessLayer;
+﻿using Microsoft.Extensions.Logging;
+using StoreDataAccessLayer;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace StoreBusinessLayer
 {
-    public class clsCategoriesBL
+    public interface ICategoriesService
     {
-        public enum enMode { AddNew = 0, Update = 1 }
-        public enMode Mode { get; set; }
+        Task<List<CategoryDTO>> GetAllCategoriesAsync();
+        Task<(List<CategoryDTO> CategoriesList, int TotalCount)> GetCategoriesPaginatedWithFiltersAsync(
+            int pageNumber, int pageSize, int? categoryID, string? categoryName, int? parentCategoryID, bool? isActive);
+        Task<List<CategoryDTO>> GetActiveCategoriesWithProductsAsync();
+        Task<CategoryDTO?> GetCategoryByCategoryIDAsync(int categoryID);
+        Task<bool> AddCategoryAsync();
+        Task<bool> UpdateCategoryAsync();
+        Task<bool> DeleteCategoryAsync(int categoryID);
+        Task<bool> IsCategoryExistsByCategoryIDAsync(int categoryID);
+        Task<bool> IsCategoryExistsByCategoryNameAsync(string name);
+        CategoryDTO categoryDTO { get; set; }
+    }
 
-        public CategoryDTO DTO { get; set; }
+    public class CategoriesService : ICategoriesService
+    {
+        private readonly ICategoriesRepository _categoriesRepository;
+        public CategoryDTO categoryDTO { get; set; }
 
-        private readonly clsCategoriesDAL _categoriesDAL;
-
-        public clsCategoriesBL(CategoryDTO dto, enMode mode = enMode.AddNew)
+        public CategoriesService(ICategoriesRepository categoriesRepository)
         {
-            this.DTO = dto;
-            this.Mode = mode;
-            _categoriesDAL = new clsCategoriesDAL(clsDataAccessSettingsDAL.CreateDataSource());
-        }
-        public clsCategoriesBL(clsCategoriesDAL CategoriesDAL)
-        {
-            _categoriesDAL = CategoriesDAL;
-        }
-        public List<CategoryDTO> GetAllCategories()
-        {
-            return _categoriesDAL.GetAllCategories();
-        }
-
-
-        public (List<CategoryDTO> CategoriesList, int TotalCount) GetCategoriesPaginatedWithFilters(
-      int pageNumber, int pageSize, int? categoryID, string? categoryName, int? parentCategoryID, bool? isActive)
-        {
-            return _categoriesDAL.GetCategoriesPaginatedWithFilters(pageNumber, pageSize, categoryID, categoryName, parentCategoryID, isActive);
+            _categoriesRepository = categoriesRepository ?? throw new ArgumentNullException(nameof(categoriesRepository));
         }
 
+        public async Task<List<CategoryDTO>> GetAllCategoriesAsync()
+        {
+            return await _categoriesRepository.GetAllCategoriesAsync();
+        }
+
+        public async Task<(List<CategoryDTO> CategoriesList, int TotalCount)> GetCategoriesPaginatedWithFiltersAsync(
+            int pageNumber, int pageSize, int? categoryID, string? categoryName, int? parentCategoryID, bool? isActive)
+        {
+            return await _categoriesRepository.GetCategoriesPaginatedWithFiltersAsync(
+                pageNumber, pageSize, categoryID, categoryName, parentCategoryID, isActive);
+        }
 
         public async Task<List<CategoryDTO>> GetActiveCategoriesWithProductsAsync()
         {
-            return await _categoriesDAL.GetActiveCategoriesWithProductsAsync();
+            return await _categoriesRepository.GetActiveCategoriesWithProductsAsync();
         }
 
-        public clsCategoriesBL FindCategoryByCategoryID(int categoryID)
+        public async Task<CategoryDTO?> GetCategoryByCategoryIDAsync(int categoryID)
         {
-            CategoryDTO dto = _categoriesDAL.GetCategoryByCategoryID(categoryID);
-
-            if (dto != null)
-            {
-                return new clsCategoriesBL(dto, enMode.Update);
-            }
-            else
-            {
-                return null;
-            }
+            return await _categoriesRepository.GetCategoryByCategoryIDAsync(categoryID);
         }
 
-        private bool _AddNewCategory()
+        public async Task<bool> AddCategoryAsync()
         {
-            int categoryID = _categoriesDAL.AddCategory(this.DTO);
-            if (categoryID > 0)
+            int insertedCategoryID = await _categoriesRepository.AddCategoryAsync(this.categoryDTO);
+            if (insertedCategoryID > 0)
             {
-                this.DTO.CategoryID = categoryID;
+                this.categoryDTO = new CategoryDTO(insertedCategoryID, this.categoryDTO.CategoryName,
+                    this.categoryDTO.ParentCategoryID, this.categoryDTO.IsActive);
                 return true;
             }
             return false;
         }
 
-        private bool _UpdateCategory()
+        public async Task<bool> UpdateCategoryAsync()
         {
-            return _categoriesDAL.UpdateCategory(this.DTO);
+            return await _categoriesRepository.UpdateCategoryAsync(this.categoryDTO);
         }
 
-        public bool Save()
+        public async Task<bool> DeleteCategoryAsync(int categoryID)
         {
-            switch (this.Mode)
-            {
-                case enMode.AddNew:
-                    if (_AddNewCategory())
-                    {
-                        this.Mode = enMode.Update;
-                        return true;
-                    }
-                    else
-                    {
-                        return false;
-                    }
-
-                case enMode.Update:
-                    return _UpdateCategory();
-
-                default:
-                    return false;
-            }
+            return await _categoriesRepository.DeleteCategoryAsync(categoryID);
         }
 
-        public bool DeleteCategory(int categoryID)
+        public async Task<bool> IsCategoryExistsByCategoryIDAsync(int categoryID)
         {
-            return _categoriesDAL.DeleteCategory(categoryID);
+            return await _categoriesRepository.IsCategoryExistsByCategoryIDAsync(categoryID);
         }
 
-        public bool IsCategoryExistsByCategoryID(int categoryID)
+        public async Task<bool> IsCategoryExistsByCategoryNameAsync(string name)
         {
-            return _categoriesDAL.IsCategoryExistsByCategoryID(categoryID);
-        }
-
-        public bool IsCategoryExistsByCategoryName(string name)
-        {
-            return _categoriesDAL.IsCategoryExistsByCategoryName(name);
+            return await _categoriesRepository.IsCategoryExistsByCategoryNameAsync(name);
         }
     }
 }

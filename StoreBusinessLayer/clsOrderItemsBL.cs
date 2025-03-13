@@ -49,9 +49,9 @@ namespace StoreBusinessLayer
             return _orderItemsDAL.GetAllOrderItems();
         }
 
-        public List<OrderItemDTO> GetAllOrderItemsByOrderID(int id)
+        public async Task<List<OrderItemDTO>> GetAllOrderItemsByOrderID(int id)
         {
-            return _orderItemsDAL.GetAllOrderItemsByOrderID(id);
+            return await _orderItemsDAL.GetAllOrderItemsByOrderID(id);
         }
 
         public clsOrderItemsBL GetOrderItemByOrderItemID(int id)
